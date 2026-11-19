@@ -5,6 +5,27 @@
 
 {% block content %}
 
+{% if current_user.is_authenticated %}
+<section class="welcome-section">
+    <div class="welcome-content">
+        <span class="welcome-label">YOUR WORKSPACE</span>
+
+        <h1>
+            Hello, <span>{{ current_user.company_name }}</span>!
+        </h1>
+
+        <p>
+            Welcome back to NaijaProtein AI.
+            Ready to create your next formulation?
+        </p>
+    </div>
+
+    <div class="welcome-icon">
+        ✳
+    </div>
+</section>
+{% endif %}
+
 <!-- HERO SECTION -->
 <section class="hero">
 

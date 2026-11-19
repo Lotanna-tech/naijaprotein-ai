@@ -1,7 +1,7 @@
 """Add admin role to users
 
 Revision ID: 65d831bd92a6
-Revises: 
+Revises:
 Create Date: 2026-11-18 07:08:06.049710
 
 """
