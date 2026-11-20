@@ -17,6 +17,19 @@ depends_on = None
 
 
 def upgrade():
+    # On a fresh database the users table does not exist yet (it was first
+    # created with db.create_all()), so create it here with the admin column.
+    if 'users' not in sa.inspect(op.get_bind()).get_table_names():
+        op.create_table(
+            'users',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('company_name', sa.String(150), nullable=False),
+            sa.Column('full_name', sa.String(150), nullable=False),
+            sa.Column('email', sa.String(150), nullable=False, unique=True),
+            sa.Column('password_hash', sa.String(255), nullable=False),
+            sa.Column('is_admin', sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
+        return
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.add_column(
             sa.Column(

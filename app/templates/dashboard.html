@@ -33,40 +33,31 @@
 
         <span class="eyebrow">
             <span class="status-dot"></span>
-            INTELLIGENT FOOD FORMULATION
+            PLANT-BASED MEAT FROM NIGERIAN PROTEINS
         </span>
 
         <h1>
-            Formulate smarter.<br>
-            <span>Produce better.</span>
+            Formulate plant-based meat<br>
+            <span>with evidence, not guesswork.</span>
         </h1>
 
         <p>
-            NaijaProtein AI helps food manufacturers discover
-            cost-effective protein formulations using locally
-            available alternative protein ingredients.
+            NaijaProtein AI helps food technologists and producers choose, combine and optimise cowpea,
+            Bambara groundnut, defatted groundnut, African yam bean and soybean for plant-based beef,
+            chicken, meat chunks and sausages, using measured data from Nigerian states.
         </p>
 
         <div class="hero-buttons">
-
-            {% if current_user.is_authenticated %}
-                <a href="{{ url_for('formulations.index') }}" class="primary-btn">
-                    Start Formulating <span>→</span>
-                </a>
-            {% else %}
-                <a href="{{ url_for('auth.login') }}" class="primary-btn">
-                    Start Formulating <span>→</span>
-                </a>
-            {% endif %}
-
-            <a href="#solutions" class="secondary-btn">
-                Explore Solutions
+            <a href="{{ url_for('formulations.simulate') if current_user.is_authenticated else url_for('auth.login') }}" class="primary-btn">
+                Simulate a recipe <span>&rarr;</span>
             </a>
-
+            <a href="{{ url_for('catalogue.index') }}" class="secondary-btn">
+                Explore the ingredients
+            </a>
         </div>
 
         <div class="hero-note">
-            Built around locally sourced Nigerian protein ingredients.
+            Results are computational estimates to guide laboratory and product trials.
         </div>
 
     </div>
@@ -82,8 +73,8 @@
         <div class="floating-card">
             <span class="floating-icon">✳</span>
             <div>
-                <strong>Smart Optimisation</strong>
-                <small>Nutrition meets affordability</small>
+                <strong>Lowest-cost recipes</strong>
+                <small>Using prices and stock by state</small>
             </div>
         </div>
 
@@ -98,12 +89,12 @@
     <div class="section-heading">
         <div>
             <span class="eyebrow">OUR INGREDIENTS</span>
-            <h2>Powered by local protein sources.</h2>
+            <h2>Five local protein sources.</h2>
         </div>
 
         <p>
-            Exploring alternative protein ingredients
-            for more affordable food production.
+            Cowpea, Bambara groundnut, defatted groundnut,
+            African yam bean and soybean.
         </p>
     </div>
 
@@ -127,6 +118,10 @@
                 {
                     "name": "African Yam Bean",
                     "image": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Defatted Groundnut",
+                    "image": "https://images.unsplash.com/photo-1567892737950-30c4db37cd89?auto=format&fit=crop&w=500&q=80"
                 }
             ] %}
 
@@ -158,6 +153,10 @@
                 {
                     "name": "African Yam Bean",
                     "image": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Defatted Groundnut",
+                    "image": "https://images.unsplash.com/photo-1567892737950-30c4db37cd89?auto=format&fit=crop&w=500&q=80"
                 }
             ] %}
 
@@ -182,126 +181,78 @@
 <section class="solutions-section" id="solutions">
 
     <div class="section-heading centered">
-        <span class="eyebrow">WHAT WE OFFER</span>
-
+        <span class="eyebrow">THE PROBLEM</span>
         <h2>
-            Making food formulation<br>
-            <span>smarter and simpler.</span>
+            High protein is not enough<br>
+            <span>to make a good meat alternative.</span>
         </h2>
-
         <p>
-            A practical formulation platform designed to help
-            manufacturers make informed production decisions.
+            A raw material can be rich in protein and still bind, hold water or emulsify poorly. Ingredients that
+            work alone may work better, or worse, together, and their properties differ between varieties, states
+            and processing. NaijaProtein AI brings that evidence together so you can test ideas before the laboratory.
         </p>
     </div>
 
     <div class="solutions-grid">
-
+        <a class="solution-card" href="{{ url_for('catalogue.index') }}">
+            <div class="solution-icon">&#9672;</div>
+            <h3>Ingredient Intelligence</h3>
+            <p>Nutrition, functional properties, biochemical characteristics, processing, price and stock for each
+               ingredient, by Nigerian state, with the research behind every value.</p>
+        </a>
+        <a class="solution-card" href="{{ url_for('formulations.simulate') }}">
+            <div class="solution-icon">&#8599;</div>
+            <h3>Simulate a recipe</h3>
+            <p>Pick your product and state, set the amount of each ingredient, water and oil, and see the nutrition,
+               cost, stock and how well it meets your targets.</p>
+        </a>
+        <a class="solution-card" href="{{ url_for('formulations.index') }}">
+            <div class="solution-icon">&#8358;</div>
+            <h3>Optimise a recipe</h3>
+            <p>Set your requirements and budget. The optimiser finds the lowest-cost recipe that meets them, or explains
+               why none can.</p>
+        </a>
         <article class="solution-card">
-            <div class="solution-icon">⌘</div>
-            <h3>Protein Formulation</h3>
-            <p>
-                Discover combinations of alternative protein
-                ingredients that meet your required nutritional targets.
-            </p>
+            <div class="solution-icon">&#8984;</div>
+            <h3>Clear explanations</h3>
+            <p>Why each ingredient was chosen, what water and oil change, how cost and stock shaped the answer, and which
+               values are measured, calculated or estimated.</p>
         </article>
-
-        <article class="solution-card">
-            <div class="solution-icon">↗</div>
-            <h3>Nutrition Analysis</h3>
-            <p>
-                Evaluate the predicted nutritional composition
-                of your proposed ingredient formulation.
-            </p>
-        </article>
-
-        <article class="solution-card">
-            <div class="solution-icon">₦</div>
-            <h3>Cost Optimisation</h3>
-            <p>
-                Find affordable ingredient combinations while
-                working within your production budget.
-            </p>
-        </article>
-
-        <article class="solution-card">
-            <div class="solution-icon">◈</div>
-            <h3>Local Ingredients</h3>
-            <p>
-                Explore soybean, Bambara groundnut, cowpea
-                and African yam bean as alternative protein sources.
-            </p>
-        </article>
-
     </div>
 
 </section>
 
 
-<!-- HOW IT WORKS -->
 <section class="how-section">
 
     <div class="how-content">
 
-        <span class="eyebrow">HOW IT WORKS</span>
+        <span class="eyebrow">FOUR PRODUCTS</span>
 
-        <h2>From ingredients to an optimised formulation.</h2>
+        <h2>Start from the product you want to make.</h2>
 
-        <p>
-            Our platform uses nutritional data and mathematical
-            optimisation to help manufacturers identify suitable
-            ingredient combinations.
-        </p>
+        <p>Each product needs different properties. Your choice decides which properties are highlighted and checked.</p>
 
         <div class="steps">
-
-            <div class="step">
-                <span>01</span>
-                <div>
-                    <h3>Define your requirements</h3>
-                    <p>Enter your production quantity, protein target and budget.</p>
-                </div>
-            </div>
-
-            <div class="step">
-                <span>02</span>
-                <div>
-                    <h3>Optimise your formulation</h3>
-                    <p>Our optimisation engine evaluates available ingredients.</p>
-                </div>
-            </div>
-
-            <div class="step">
-                <span>03</span>
-                <div>
-                    <h3>Review your results</h3>
-                    <p>View recommended proportions, predicted protein and estimated cost.</p>
-                </div>
-            </div>
-
+            <div class="step"><span>01</span><div><h3>Plant-based beef</h3><p>Burger patties and mince: binding, firmness, juiciness, fat retention.</p></div></div>
+            <div class="step"><span>02</span><div><h3>Plant-based chicken</h3><p>Nuggets and chunks: tender, cohesive, moist.</p></div></div>
+            <div class="step"><span>03</span><div><h3>Plant-based meat chunks</h3><p>Textured pieces: structure, rehydration, chewiness.</p></div></div>
+            <div class="step"><span>04</span><div><h3>Plant-based sausages</h3><p>Stable emulsion, gel that sets firm, water and oil retention.</p></div></div>
         </div>
 
-        {% if current_user.is_authenticated %}
-            <a href="{{ url_for('formulations.index') }}" class="primary-btn">
-                Get Started →
-            </a>
-        {% else %}
-            <a href="{{ url_for('auth.login') }}" class="primary-btn">
-                Get Started →
-            </a>
-        {% endif %}
+        <a href="{{ url_for('formulations.simulate') if current_user.is_authenticated else url_for('auth.login') }}" class="primary-btn">
+            Get started &rarr;
+        </a>
 
     </div>
 
     <div class="how-visual">
         <div class="nutrition-box">
-            <span class="eyebrow">THE PROCESS</span>
-            <div class="nutrition-symbol">✳</div>
-            <h3>Nutrition + Optimisation</h3>
-            <p>
-                Data-driven formulation decisions
-                for food manufacturers.
-            </p>
+            <span class="eyebrow">ALL OF NIGERIA</span>
+            <div class="nutrition-symbol">&#10035;</div>
+            <h3>36 states and the FCT</h3>
+            <p>Choose where your ingredients come from. Measurements from that state are used, and the app tells you
+               when a state has no data.</p>
             <div class="nutrition-line"></div>
             <small>NaijaProtein AI</small>
         </div>
@@ -310,7 +261,6 @@
 </section>
 
 
-<!-- HELP SECTION -->
 <section class="help-section" id="help">
 
     <span class="eyebrow">NEED ASSISTANCE?</span>
@@ -318,8 +268,8 @@
     <h2>Have questions about formulation?</h2>
 
     <p>
-        Learn how NaijaProtein AI works and how to use
-        nutritional and cost requirements to formulate products.
+        Ask us how NaijaProtein AI works, how to add your own laboratory data,
+        or how to use it for your product.
     </p>
 
     <a href="#contact" class="secondary-btn">
@@ -334,7 +284,7 @@
 
     <div>
         <span class="eyebrow">GET IN TOUCH</span>
-        <h2>Let's build better food formulations.</h2>
+        <h2>Let's build better plant-based meat.</h2>
         <p>
             Reach out to the NaijaProtein AI team for enquiries
             and assistance.
