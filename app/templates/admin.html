@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard | NaijaProtein AI{% endblock %}
+
+{% block content %}
+
+<section class="admin-section">
+
+    <div class="admin-header">
+        <div>
+            <h1>Admin Dashboard</h1>
+            <p>Manage NaijaProtein AI users and accounts.</p>
+        </div>
+
+        <a href="{{ url_for('auth.logout') }}">Logout</a>
+    </div>
+
+    <div class="admin-stats">
+
+        <div class="admin-stat">
+            <h2>{{ total_users }}</h2>
+            <p>Total Users</p>
+        </div>
+
+        <div class="admin-stat">
+            <h2>{{ total_admins }}</h2>
+            <p>Administrators</p>
+        </div>
+
+    </div>
+
+    <div class="admin-table-container">
+
+        <h2>Registered Users</h2>
+
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Company</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.company_name }}</td>
+                    <td>{{ user.full_name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.is_admin %}
+                            Admin
+                        {% else %}
+                            User
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">No registered users yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</section>
+
+{% endblock %}

@@ -1,0 +1,39 @@
+
+{% extends "base.html" %}
+
+{% block title %}Create Account | NaijaProtein AI{% endblock %}
+
+{% block content %}
+<section class="auth-section">
+    <div class="auth-card">
+        <h1>Create your account</h1>
+        <p>Join NaijaProtein AI to start formulating smarter.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+        <div class="flash-message {{ category }}">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endwith %}
+
+        <form method="POST">
+            <label>Company name</label>
+            <input type="text" name="company_name" required>
+
+            <label>Full name</label>
+            <input type="text" name="full_name" required>
+
+            <label>Email address</label>
+            <input type="email" name="email" required>
+
+            <label>Password</label>
+            <input type="password" name="password" required>
+
+            <button type="submit">Create Account</button>
+        </form>
+
+        <p>Already registered? <a href="{{ url_for('auth.login') }}">Login</a></p>
+    </div>
+</section>
+{% endblock %}

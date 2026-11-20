@@ -1,0 +1,393 @@
+
+{% extends "base.html" %}
+
+{% block title %}New Formulation | NaijaProtein AI{% endblock %}
+
+{% block styles %}
+<style>
+    .workspace {
+        max-width: 1150px;
+        margin: 60px auto;
+        padding: 0 24px 80px;
+    }
+
+    .workspace-header {
+        margin-bottom: 35px;
+    }
+
+    .workspace-header h1 {
+        font-size: 36px;
+        color: #172d23;
+        margin: 12px 0;
+    }
+
+    .workspace-header p {
+        color: #718078;
+        line-height: 1.7;
+    }
+
+    .workspace-grid {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 25px;
+        align-items: start;
+    }
+
+    .workspace-card {
+        background: white;
+        border: 1px solid #e5ebe6;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 8px 30px rgba(20, 50, 30, 0.04);
+    }
+
+    .workspace-card h2 {
+        font-size: 20px;
+        color: #20372a;
+        margin-bottom: 8px;
+    }
+
+    .card-description {
+        color: #839087;
+        font-size: 14px;
+        margin-bottom: 28px;
+        line-height: 1.6;
+    }
+
+    .form-group {
+        margin-bottom: 23px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #34483a;
+        font-size: 14px;
+        margin-bottom: 9px;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 14px;
+        border: 1px solid #dce5de;
+        border-radius: 9px;
+        font-size: 15px;
+        font-family: inherit;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus {
+        border-color: #31865a;
+        box-shadow: 0 0 0 3px rgba(49, 134, 90, 0.1);
+    }
+
+    .field-hint {
+        display: block;
+        color: #8b968e;
+        font-size: 12px;
+        margin-top: 7px;
+    }
+
+    .ingredient-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .ingredient-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 15px;
+        border: 1px solid #e0e8e2;
+        border-radius: 10px;
+        color: #34483a;
+        font-size: 14px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .ingredient-option:hover {
+        border-color: #31865a;
+        background: #f5faf6;
+    }
+
+    .ingredient-option input {
+        accent-color: #26804d;
+        width: 16px;
+        height: 16px;
+    }
+
+    .optimise-btn {
+        width: 100%;
+        border: none;
+        background: #247b49;
+        color: white;
+        padding: 16px;
+        border-radius: 9px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: not-allowed;
+        opacity: 0.8;
+        margin-top: 12px;
+    }
+
+    .optimise-btn:hover {
+        background: #1c643a;
+    }
+
+    .preview-panel {
+        background: #f5f9f5;
+        border: 1px solid #e2ebe3;
+        border-radius: 16px;
+        padding: 28px;
+    }
+
+    .preview-panel h2 {
+        color: #20372a;
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    .preview-panel > p {
+        color: #7c8b80;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .preview-illustration {
+        background: white;
+        border: 1px solid #e5ebe6;
+        border-radius: 12px;
+        padding: 25px 15px;
+        text-align: center;
+        margin-top: 25px;
+    }
+
+    .preview-symbol {
+        font-size: 42px;
+        color: #348658;
+        margin-bottom: 12px;
+    }
+
+    .preview-illustration h3 {
+        color: #294432;
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+
+    .preview-illustration p {
+        color: #89958c;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .preview-note {
+        margin-top: 20px;
+        padding: 15px;
+        background: #eaf3eb;
+        border-radius: 9px;
+        color: #45664e;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    @media (max-width: 800px) {
+        .workspace-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .workspace-header h1 {
+            font-size: 29px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .ingredient-options {
+            grid-template-columns: 1fr;
+        }
+
+        .workspace-card,
+        .preview-panel {
+            padding: 20px;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<section class="workspace">
+
+    <div class="workspace-header">
+        <span class="eyebrow">FORMULATION WORKSPACE</span>
+
+        <h1>Create a new formulation.</h1>
+
+        <p>
+            Define your production requirements and select
+            the ingredients you want to work with.
+        </p>
+    </div>
+
+
+    <div class="workspace-grid">
+
+        <!-- FORM INPUTS -->
+        <div class="workspace-card">
+
+            <h2>Production Requirements</h2>
+
+            <p class="card-description">
+                Provide the nutritional and financial requirements
+                for your proposed formulation.
+            </p>
+
+            <form id="formulationForm">
+
+                <div class="form-group">
+                    <label for="quantity">Production Quantity (kg)</label>
+
+                    <input
+                        type="number"
+                        id="quantity"
+                        name="quantity"
+                        min="0.01"
+                        step="any"
+                        placeholder="e.g. 100"
+                        required
+                    >
+
+                    <span class="field-hint">
+                        Total quantity of formulation you want to produce.
+                    </span>
+                </div>
+
+
+                <div class="form-group">
+                    <label for="protein">Minimum Protein Target (%)</label>
+
+                    <input
+                        type="number"
+                        id="protein"
+                        name="protein"
+                        min="0"
+                        max="100"
+                        step="any"
+                        placeholder="e.g. 25"
+                        required
+                    >
+
+                    <span class="field-hint">
+                        Minimum protein percentage required in your final blend.
+                    </span>
+                </div>
+
+
+                <div class="form-group">
+                    <label for="budget">Maximum Ingredient Budget (₦)</label>
+
+                    <input
+                        type="number"
+                        id="budget"
+                        name="budget"
+                        min="0"
+                        step="any"
+                        placeholder="e.g. 500000"
+                        required
+                    >
+
+                    <span class="field-hint">
+                        Maximum amount available for purchasing ingredients.
+                    </span>
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>Select Available Ingredients</label>
+
+                    <span class="field-hint">
+                        Choose the ingredients you want the optimiser to consider.
+                    </span>
+
+                    <div class="ingredient-options">
+
+                        <label class="ingredient-option">
+                            <input type="checkbox" name="ingredients" value="soybean" checked>
+                            Soybean
+                        </label>
+
+                        <label class="ingredient-option">
+                            <input type="checkbox" name="ingredients" value="bambara" checked>
+                            Bambara Groundnut
+                        </label>
+
+                        <label class="ingredient-option">
+                            <input type="checkbox" name="ingredients" value="cowpea" checked>
+                            Cowpea
+                        </label>
+
+                        <label class="ingredient-option">
+                            <input type="checkbox" name="ingredients" value="ayb" checked>
+                            African Yam Bean
+                        </label>
+
+                    </div>
+
+                </div>
+
+
+                <button type="button" class="optimise-btn" disabled>
+                    Optimisation Coming Soon →
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- PREVIEW PANEL -->
+        <aside class="preview-panel">
+
+            <span class="eyebrow">YOUR WORKSPACE</span>
+
+            <h2>Ready to formulate?</h2>
+
+            <p>
+                Once your requirements are submitted,
+                the optimisation engine will evaluate
+                suitable ingredient combinations.
+            </p>
+
+            <div class="preview-illustration">
+
+                <div class="preview-symbol">✳</div>
+
+                <h3>Smart Formulation</h3>
+
+                <p>
+                    Nutrition, ingredient availability
+                    and production cost working together.
+                </p>
+
+            </div>
+
+            <div class="preview-note">
+                <strong>What happens next?</strong><br><br>
+
+                Your inputs will be evaluated against
+                ingredient nutritional data and prices
+                to identify suitable formulations.
+            </div>
+
+        </aside>
+
+    </div>
+
+</section>
+
+{% endblock %}

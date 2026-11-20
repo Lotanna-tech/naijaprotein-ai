@@ -1,0 +1,360 @@
+
+{% extends "base.html" %}
+
+{% block title %}Home | NaijaProtein AI{% endblock %}
+
+{% block content %}
+
+{% if current_user.is_authenticated %}
+<section class="welcome-section">
+    <div class="welcome-content">
+        <span class="welcome-label">YOUR WORKSPACE</span>
+
+        <h1>
+            Hello, <span>{{ current_user.company_name }}</span>!
+        </h1>
+
+        <p>
+            Welcome back to NaijaProtein AI.
+            Ready to create your next formulation?
+        </p>
+    </div>
+
+    <div class="welcome-icon">
+        ✳
+    </div>
+</section>
+{% endif %}
+
+<!-- HERO SECTION -->
+<section class="hero">
+
+    <div class="hero-content">
+
+        <span class="eyebrow">
+            <span class="status-dot"></span>
+            INTELLIGENT FOOD FORMULATION
+        </span>
+
+        <h1>
+            Formulate smarter.<br>
+            <span>Produce better.</span>
+        </h1>
+
+        <p>
+            NaijaProtein AI helps food manufacturers discover
+            cost-effective protein formulations using locally
+            available alternative protein ingredients.
+        </p>
+
+        <div class="hero-buttons">
+
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('formulations.index') }}" class="primary-btn">
+                    Start Formulating <span>→</span>
+                </a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}" class="primary-btn">
+                    Start Formulating <span>→</span>
+                </a>
+            {% endif %}
+
+            <a href="#solutions" class="secondary-btn">
+                Explore Solutions
+            </a>
+
+        </div>
+
+        <div class="hero-note">
+            Built around locally sourced Nigerian protein ingredients.
+        </div>
+
+    </div>
+
+    <div class="hero-visual">
+
+        <div class="hero-image">
+            <img
+                src="https://images.unsplash.com/photo-1515543904379-3d757afe72e4?auto=format&fit=crop&w=1000&q=85"
+                alt="Natural food ingredients">
+        </div>
+
+        <div class="floating-card">
+            <span class="floating-icon">✳</span>
+            <div>
+                <strong>Smart Optimisation</strong>
+                <small>Nutrition meets affordability</small>
+            </div>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- INGREDIENT SCROLLING SECTION -->
+<section class="ingredient-section" id="ingredients">
+
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">OUR INGREDIENTS</span>
+            <h2>Powered by local protein sources.</h2>
+        </div>
+
+        <p>
+            Exploring alternative protein ingredients
+            for more affordable food production.
+        </p>
+    </div>
+
+    <div class="ingredient-marquee">
+
+        <div class="ingredient-track">
+
+            {% for item in [
+                {
+                    "name": "Soybean",
+                    "image": "https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Bambara Groundnut",
+                    "image": "https://images.unsplash.com/photo-1515543904379-3d757afe72e4?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Cowpea",
+                    "image": "https://images.pexels.com/photos/17975550/pexels-photo-17975550.jpeg"
+                },
+                {
+                    "name": "African Yam Bean",
+                    "image": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80"
+                }
+            ] %}
+
+                <div class="ingredient-card">
+                    <img src="{{ item.image }}" alt="{{ item.name }}">
+                    <div class="ingredient-overlay">
+                        <h3>{{ item.name }}</h3>
+                        <span>Alternative protein</span>
+                    </div>
+                </div>
+
+            {% endfor %}
+
+            <!-- Duplicate cards for continuous scrolling -->
+
+            {% for item in [
+                {
+                    "name": "Soybean",
+                    "image": "https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Bambara Groundnut",
+                    "image": "https://images.unsplash.com/photo-1515543904379-3d757afe72e4?auto=format&fit=crop&w=500&q=80"
+                },
+                {
+                    "name": "Cowpea",
+                    "image": "https://images.pexels.com/photos/17975550/pexels-photo-17975550.jpeg"
+                },
+                {
+                    "name": "African Yam Bean",
+                    "image": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=500&q=80"
+                }
+            ] %}
+
+                <div class="ingredient-card" aria-hidden="true">
+                    <img src="{{ item.image }}" alt="">
+                    <div class="ingredient-overlay">
+                        <h3>{{ item.name }}</h3>
+                        <span>Alternative protein</span>
+                    </div>
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- SOLUTIONS SECTION -->
+<section class="solutions-section" id="solutions">
+
+    <div class="section-heading centered">
+        <span class="eyebrow">WHAT WE OFFER</span>
+
+        <h2>
+            Making food formulation<br>
+            <span>smarter and simpler.</span>
+        </h2>
+
+        <p>
+            A practical formulation platform designed to help
+            manufacturers make informed production decisions.
+        </p>
+    </div>
+
+    <div class="solutions-grid">
+
+        <article class="solution-card">
+            <div class="solution-icon">⌘</div>
+            <h3>Protein Formulation</h3>
+            <p>
+                Discover combinations of alternative protein
+                ingredients that meet your required nutritional targets.
+            </p>
+        </article>
+
+        <article class="solution-card">
+            <div class="solution-icon">↗</div>
+            <h3>Nutrition Analysis</h3>
+            <p>
+                Evaluate the predicted nutritional composition
+                of your proposed ingredient formulation.
+            </p>
+        </article>
+
+        <article class="solution-card">
+            <div class="solution-icon">₦</div>
+            <h3>Cost Optimisation</h3>
+            <p>
+                Find affordable ingredient combinations while
+                working within your production budget.
+            </p>
+        </article>
+
+        <article class="solution-card">
+            <div class="solution-icon">◈</div>
+            <h3>Local Ingredients</h3>
+            <p>
+                Explore soybean, Bambara groundnut, cowpea
+                and African yam bean as alternative protein sources.
+            </p>
+        </article>
+
+    </div>
+
+</section>
+
+
+<!-- HOW IT WORKS -->
+<section class="how-section">
+
+    <div class="how-content">
+
+        <span class="eyebrow">HOW IT WORKS</span>
+
+        <h2>From ingredients to an optimised formulation.</h2>
+
+        <p>
+            Our platform uses nutritional data and mathematical
+            optimisation to help manufacturers identify suitable
+            ingredient combinations.
+        </p>
+
+        <div class="steps">
+
+            <div class="step">
+                <span>01</span>
+                <div>
+                    <h3>Define your requirements</h3>
+                    <p>Enter your production quantity, protein target and budget.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <span>02</span>
+                <div>
+                    <h3>Optimise your formulation</h3>
+                    <p>Our optimisation engine evaluates available ingredients.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <span>03</span>
+                <div>
+                    <h3>Review your results</h3>
+                    <p>View recommended proportions, predicted protein and estimated cost.</p>
+                </div>
+            </div>
+
+        </div>
+
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('formulations.index') }}" class="primary-btn">
+                Get Started →
+            </a>
+        {% else %}
+            <a href="{{ url_for('auth.login') }}" class="primary-btn">
+                Get Started →
+            </a>
+        {% endif %}
+
+    </div>
+
+    <div class="how-visual">
+        <div class="nutrition-box">
+            <span class="eyebrow">THE PROCESS</span>
+            <div class="nutrition-symbol">✳</div>
+            <h3>Nutrition + Optimisation</h3>
+            <p>
+                Data-driven formulation decisions
+                for food manufacturers.
+            </p>
+            <div class="nutrition-line"></div>
+            <small>NaijaProtein AI</small>
+        </div>
+    </div>
+
+</section>
+
+
+<!-- HELP SECTION -->
+<section class="help-section" id="help">
+
+    <span class="eyebrow">NEED ASSISTANCE?</span>
+
+    <h2>Have questions about formulation?</h2>
+
+    <p>
+        Learn how NaijaProtein AI works and how to use
+        nutritional and cost requirements to formulate products.
+    </p>
+
+    <a href="#contact" class="secondary-btn">
+        Contact Our Team →
+    </a>
+
+</section>
+
+
+<!-- CONTACT SECTION -->
+<section class="contact-section" id="contact">
+
+    <div>
+        <span class="eyebrow">GET IN TOUCH</span>
+        <h2>Let's build better food formulations.</h2>
+        <p>
+            Reach out to the NaijaProtein AI team for enquiries
+            and assistance.
+        </p>
+    </div>
+
+    <div class="contact-details">
+
+        <a href="tel:+2348105232885">
+            <span>PHONE</span>
+            +234 810 523 2885
+        </a>
+
+        <a href="tel:+2349022197428">
+            <span>PHONE</span>
+            +234 902 219 7428
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}
