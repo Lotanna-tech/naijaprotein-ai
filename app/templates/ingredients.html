@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fmt, kind, loc_mark, state_form %}
+
+{% block title %}Ingredients | NaijaProtein AI{% endblock %}
+
+{% block content %}
+<section class="page">
+
+    <div class="page-header">
+        <span class="eyebrow">INGREDIENT INTELLIGENCE</span>
+        <h1>What each protein ingredient can bring to a plant-based meat product.</h1>
+        <p>
+            Nutrition, how each ingredient behaves in a product (water and oil holding, binding, gelling),
+            biochemical characteristics, processing, price and stock, and the research behind every number.
+            Values are shown for the Nigerian state you choose.
+        </p>
+    </div>
+
+    {{ state_form(states, state_labels, coverage, location, url_for('catalogue.index'), {'q': args.get('q')}) }}
+
+    <form method="get" action="{{ url_for('catalogue.compare') }}">
+        {% if location %}<input type="hidden" name="location" value="{{ location }}">{% endif %}
+        <div class="card-grid">
+            {% for ing in items %}
+            {% set st = ing.data_status() %}
+            <article class="ing-card">
+                {% if ing.image_url %}<img src="{{ ing.image_url }}" alt="{{ ing.name }}" loading="lazy">{% endif %}
+                <div class="body">
+                    <div>
+                        <h3>{{ ing.name }}</h3>
+                        <div class="sci">{{ ing.scientific_name }}</div>
+                        <div class="muted">{{ ing.form }}</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><strong>{{ fmt(ing.get('protein'), 1) }}</strong><small>Protein %</small></div>
+                        <div><strong>{{ fmt(ing.get('fat'), 1) }}</strong><small>Fat %</small></div>
+                        <div><strong>{{ fmt(ing.get('water_absorption'), 2) }}</strong><small>Water g/g</small></div>
+                        <div><strong>{{ fmt(ing.price.value, 0) if ing.price else '–' }}</strong><small>&#8358;/kg</small></div>
+                    </div>
+                    <p class="muted" style="font-size:13px">
+                        {% if st.available %}
+                            {{ st.measured }} measured value{{ 's' if st.measured != 1 }}{% if st.predicted %}, {{ st.predicted }} estimated{% endif %}
+                            {% if location %}for {{ location }}{% endif %}.
+                        {% else %}
+                            No verified data{% if location %} for {{ location }}{% endif %}.
+                        {% endif %}
+                        {% if not ing.price %}No verified price{% if location %} here{% endif %}.{% endif %}
+                    </p>
+                    <div class="actions">
+                        <label><input type="checkbox" name="ids" value="{{ ing.id }}" checked> Compare</label>
+                        <a class="btn small secondary" href="{{ url_for('catalogue.profile', ingredient_id=ing.id, location=location) }}">Details &rarr;</a>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="btn-row" style="margin-top:22px">
+            <label for="product">Compare for</label>
+            <select id="product" name="product">
+                <option value="">Any product</option>
+                {% for p in products.values() %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+            </select>
+            <button class="btn" type="submit">Compare selected</button>
+        </div>
+    </form>
+
+    <div class="card" style="margin-top:30px">
+        <h2>Where the data comes from</h2>
+        <p class="muted">
+            {{ summary.verified_records }} verified values from {{ summary.states_with_data | length }} states
+            ({{ summary.states_with_data | join(', ') }}). Prices and stock are available for
+            {{ price_states | join(', ') or 'no states' }}.
+            {{ summary.unverified_records }} further values are marked as estimates or assumptions by their provider; they
+            are listed on each ingredient page but not used in any calculation.
+        </p>
+    </div>
+</section>
+{% endblock %}

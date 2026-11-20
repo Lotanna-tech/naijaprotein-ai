@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fmt, kind, badge, loc_mark, state_form, tip %}
+
+{% block title %}{{ ing.name }} | NaijaProtein AI{% endblock %}
+
+{% block content %}
+<section class="page">
+    <div class="page-header">
+        <a class="muted" href="{{ url_for('catalogue.index', location=location) }}">&larr; All ingredients</a>
+        <h1>{{ ing.name }}</h1>
+        <p><em>{{ ing.scientific_name }}</em> &middot; {{ ing.form }}</p>
+        <p>{{ ing.description }}</p>
+    </div>
+
+    {{ state_form(states, state_labels, coverage, location, url_for('catalogue.profile', ingredient_id=ing.id)) }}
+
+    <div class="layout-2">
+        <div>
+            <div class="card">
+                <h2>Good for</h2>
+                {% set good = [] %}
+                {% for p in products.values() %}
+                    {% set rels = p.relevant | selectattr('property', 'in', ing.values | list) | list %}
+                    {% if rels %}{% set _ = good.append((p, rels)) %}{% endif %}
+                {% endfor %}
+                {% if good %}
+                <ul class="explain-list">
+                    {% for p, rels in good %}
+                        <li><strong>{{ p.name }}</strong>: has data on {{ rels | map(attribute='property') | map('replace', '_', ' ') | join(', ') }}.
+                            <a href="{{ url_for('catalogue.compare', product=p.id, location=location) }}">Compare for this product &rarr;</a></li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                    <p class="muted">No functional data{% if location %} for {{ location }}{% endif %} yet, so suitability cannot be judged.</p>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <h2>Processing</h2>
+                <p class="muted">{{ ing.processing or 'No processing information recorded.' }}</p>
+            </div>
+
+            <div class="card">
+                <h2>Price and stock{% if location %} in {{ location }}{% endif %}</h2>
+                {% if ing.price %}
+                    <div class="kpis">
+                        <div class="kpi"><small>Average price</small><strong>&#8358;{{ fmt(ing.price.value, 0) }}/kg</strong>
+                            {% if ing.price.n > 1 %}<span class="range">&#8358;{{ fmt(ing.price.low, 0) }}&ndash;{{ fmt(ing.price.high, 0) }} across {{ ing.price.n }} lots</span>{% endif %}</div>
+                        {% if ing.price.availability_kg is not none %}
+                        <div class="kpi"><small>Reported stock</small><strong>{{ '{:,.0f}'.format(ing.price.availability_kg) }} kg</strong>
+                            <span class="range">latest {{ ing.price.latest_date }}</span></div>
+                        {% endif %}
+                    </div>
+                    <div class="table-wrap"><table class="data-table">
+                        <thead><tr><th>Seller / market</th><th class="num">&#8358;/kg</th><th class="num">Stock</th><th class="num">Max share {{ tip('The largest share of the protein ingredients the supplier data allows for this lot.') }}</th></tr></thead>
+                        <tbody>
+                        {% for lot in ing.price.lots %}
+                            <tr><td>{{ lot.supplier }}<span class="range">{{ lot.market }}, {{ lot.state }} &middot; {{ lot.date }}</span></td>
+                                <td class="num">{{ '{:,.0f}'.format(lot.price) }}</td>
+                                <td class="num">{{ '{:,.0f}'.format(lot.availability_kg) ~ ' kg' if lot.availability_kg is not none else '–' }}</td>
+                                <td class="num">{{ (lot.max_blend_share_pct | int) ~ '%' if lot.max_blend_share_pct is not none else '–' }}</td></tr>
+                        {% endfor %}
+                        </tbody></table></div>
+                {% else %}
+                    <p class="muted">No verified price{% if location %} for {{ location }}{% endif %}. This ingredient cannot be costed or
+                        optimised here. Prices are never estimated.</p>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <h2>Sources</h2>
+                {% set used = [] %}
+                {% for v in ing.values.values() %}{% for s in v.source_ids %}{% if s not in used %}{% set _ = used.append(s) %}{% endif %}{% endfor %}{% endfor %}
+                {% if ing.price %}{% for s in ing.price.source_ids %}{% if s not in used %}{% set _ = used.append(s) %}{% endif %}{% endfor %}{% endif %}
+                {% if used %}
+                <ol class="source-list">
+                    {% for sid in used | sort %}
+                        {% set s = sources.get(sid) %}
+                        <li>{{ s.citation if s else sid }}{% if s and s.link %}<br><a href="{{ s.link }}" target="_blank" rel="noopener">{{ s.link }}</a>{% endif %}</li>
+                    {% endfor %}
+                </ol>
+                {% else %}<p class="muted">No sources for the values shown.</p>{% endif %}
+            </div>
+        </div>
+
+        <div>
+            {% for group, props in groups.items() %}
+            <div class="card table-wrap">
+                <h2>{{ group_labels[group] }}</h2>
+                <p class="muted">{{ group_notes[group] }}</p>
+                <table class="data-table">
+                    <thead><tr><th>Property</th><th class="num">Value</th><th>Type</th><th>How measured</th></tr></thead>
+                    <tbody>
+                    {% for p in props %}
+                        {% set v = ing.values.get(p.key) %}
+                        <tr>
+                            <td>{{ p.label }} {{ tip(p.plain) }}<span class="range">{{ p.unit }}</span></td>
+                            {% if v %}
+                                <td class="num">{{ fmt(v.value) }}
+                                    {% if v.n > 1 %}<span class="range">{{ fmt(v.low) }}&ndash;{{ fmt(v.high) }}, {{ v.n }} samples</span>{% endif %}
+                                    {% if v.kind == 'predicted' %}<span class="range">likely {{ fmt(v.low) }}&ndash;{{ fmt(v.high) }}</span>{% endif %}</td>
+                                <td>{{ kind(v.kind) }} {{ loc_mark(v, location) }}</td>
+                                <td class="muted">
+                                    {% if v.kind == 'predicted' %}
+                                        {{ v.prediction.note }}
+                                        <details><summary>Details</summary>{{ v.prediction.method }}.
+                                            Based on {{ v.prediction.n_training }} measurements{% if v.prediction.training_states %} from {{ v.prediction.training_states | join(', ') }}{% endif %}.
+                                            {% if v.prediction.relative_error is defined %}Average error when checked: {{ (v.prediction.relative_error * 100) | round(1) }}%.{% endif %}
+                                            {% if v.prediction.q2_loo is defined %}Cross-validated Q&sup2; {{ v.prediction.q2_loo }}.{% endif %}</details>
+                                    {% else %}
+                                    {% for r in v.records %}
+                                        <div class="record">
+                                            {% if r.variety %}<strong>{{ r.variety }}</strong>, {% endif %}{{ r.state }}{% if r.site %} ({{ r.site }}){% endif %}: {{ fmt(r.value) }}
+                                            <details><summary>Method and source</summary>
+                                                {{ r.method or 'Method not stated' }}{% if r.processing %}; {{ r.processing }}{% endif %}.
+                                                {% if r.conversion_note %}Reported as {{ r.reported_value }} {{ r.reported_unit }}; {{ r.conversion_note }}.{% endif %}
+                                                {% if r.notes %}{{ r.notes }}.{% endif %}
+                                                Source: {{ sources[r.source_id].citation if r.source_id in sources else r.source_id }}
+                                            </details>
+                                        </div>
+                                    {% endfor %}
+                                    {% endif %}
+                                    {% if v.unverified %}<span class="range">{{ v.unverified }} unverified value{{ 's' if v.unverified != 1 }} not used</span>{% endif %}
+                                </td>
+                            {% else %}
+                                <td class="num muted">&ndash;</td>
+                                <td>{{ kind('unavailable') }}</td>
+                                <td class="muted">{{ reasons.get(p.key) or 'No measurements recorded.' }}</td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endfor %}
+
+            <div class="card table-wrap">
+                <h2>How values vary across Nigerian states</h2>
+                <p class="muted">For each property, the national level, how much states differ from each other, and how
+                    much samples differ within a state (variety, lot, laboratory). State differences are estimated with a
+                    random-effects (hierarchical) model that does not over-trust states with one sample.</p>
+                {% if variation %}
+                <table class="data-table">
+                    <thead><tr><th>Property</th><th class="num">National</th><th>By state</th><th class="num">Due to location {{ tip('Share of the total variation explained by differences between states.') }}</th><th>Usable for states without data?</th></tr></thead>
+                    <tbody>
+                    {% for key, m in variation.items() %}
+                        <tr><td>{{ key | replace('_', ' ') | capitalize }}</td>
+                            <td class="num">{{ fmt(m.national_mean) }}</td>
+                            <td class="muted">{% for st, d in m.states.items() %}{{ st }} {{ fmt(d.mean) }} (n={{ d.n }}){% if not loop.last %}; {% endif %}{% endfor %}</td>
+                            <td class="num">{{ ((m.share_of_variation_from_location * 100) | round(0) | int) ~ '%' if m.share_of_variation_from_location is not none else '–' }}</td>
+                            <td class="muted">{% if m.validation.validated %}Yes: checked on {{ m.validation.n_states }} states, average error {{ (m.validation.relative_error * 100) | round(1) }}%{% else %}No. {{ m.validation.reason }}{% endif %}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <p class="muted" style="font-size:12px">{{ (variation.values() | first).covariates }}</p>
+                {% else %}<p class="muted">No verified data.</p>{% endif %}
+            </div>
+
+            {% if unverified or unverified_prices %}
+            <div class="card">
+                <details><summary><strong>Unverified values (not used)</strong></summary>
+                    <p class="muted">The data provider marked these as estimates or assumptions. They are kept for reference and
+                        are never used in calculations.</p>
+                    <ul class="source-list">
+                    {% for key, recs in unverified.items() %}
+                        <li>{{ key | replace('_', ' ') | capitalize }}: {% for r in recs %}{{ fmt(r.value) }} ({{ r.status }}, {{ r.state }}){% if not loop.last %}; {% endif %}{% endfor %}</li>
+                    {% endfor %}
+                    {% if unverified_prices %}<li>Price: {% for p, row, st, state in unverified_prices %}&#8358;{{ '{:,.0f}'.format(p) }} ({{ st }}, {{ state }}){% if not loop.last %}; {% endif %}{% endfor %}</li>{% endif %}
+                    </ul>
+                </details>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
