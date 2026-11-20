@@ -70,7 +70,7 @@ def explain_blend(blend_result: dict) -> str:
     
     if USE_MOCK:
         print("   [MOCK MODE]: Simulating Bedrock (Explanation)...")
-        return f"To achieve {blend_result['achieved_protein_pct']}% protein while keeping fibre at {blend_result['achieved_fibre_pct']}%, the optimal blend is {blend_summary}. The total cost is {blend_result['total_batch_cost']:,.2f} NGN. The optimiser selected cheaper, high-fibre ingredients like Palm Kernel Cake to lower the cost, while using just enough Groundnut Cake to hit the protein target."
+        return f"To achieve {blend_result['achieved_protein_pct']}% protein while keeping fibre at {blend_result['achieved_fibre_pct']}%, the optimal blend is {blend_summary}. The total cost is {blend_result['total_batch_cost']:,.2f} NGN. The optimiser mathematically selected the most cost-effective isolates to hit your protein targets while respecting the maximum inclusion limits."
 
     # --- REAL BEDROCK CODE ---
     prompt = f"""
