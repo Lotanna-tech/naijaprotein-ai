@@ -4,16 +4,17 @@ from scipy.optimize import linprog
 from typing import Dict, Any
 import json
 
+# --------------------------------------------------------- 
+# 1. THE DATASET (Pivot to Plant-Protein Isolates)
 # ---------------------------------------------------------
-# 1. THE DATASET (From your guide's illustrative data)
-# ---------------------------------------------------------
+# Note: Replace this with the Data Lead's CSV later.
 ingredients_data = [
-    {"name": "Maize", "protein_pct": 9.0, "fibre_pct": 2.5, "price_per_kg": 500, "max_share": 0.60},
-    {"name": "Soybean meal", "protein_pct": 45.0, "fibre_pct": 6.0, "price_per_kg": 900, "max_share": 0.40},
-    {"name": "Groundnut cake", "protein_pct": 45.0, "fibre_pct": 7.0, "price_per_kg": 800, "max_share": 0.35},
-    {"name": "Cowpea", "protein_pct": 23.0, "fibre_pct": 5.0, "price_per_kg": 700, "max_share": 0.30},
-    {"name": "Wheat offal", "protein_pct": 15.0, "fibre_pct": 10.0, "price_per_kg": 350, "max_share": 0.30},
-    {"name": "Palm kernel cake", "protein_pct": 18.0, "fibre_pct": 14.0, "price_per_kg": 300, "max_share": 0.25},
+    # Name, Protein %, Fibre %, Cost (NGN/kg), Max %, Origin
+    {"name": "Bambara Isolate (Plateau)", "protein_pct": 85.0, "fibre_pct": 2.0, "price_per_kg": 4500, "max_share": 0.50},
+    {"name": "Bambara Isolate (Kano)", "protein_pct": 78.0, "fibre_pct": 2.5, "price_per_kg": 4200, "max_share": 0.50},
+    {"name": "Cowpea Concentrate", "protein_pct": 60.0, "fibre_pct": 3.0, "price_per_kg": 2800, "max_share": 0.40},
+    {"name": "Soy Isolate (Import)", "protein_pct": 90.0, "fibre_pct": 1.0, "price_per_kg": 5500, "max_share": 0.60},
+    {"name": "Groundnut Concentrate", "protein_pct": 55.0, "fibre_pct": 4.0, "price_per_kg": 2500, "max_share": 0.30},
 ]
 df = pd.DataFrame(ingredients_data)
 
@@ -22,25 +23,19 @@ df = pd.DataFrame(ingredients_data)
 # ---------------------------------------------------------
 def optimize_blend(target_protein: float, max_fibre: float, batch_kg: float = 1000) -> Dict[str, Any]:
     num_ingredients = len(df)
-    
-    # Objective: Minimize cost (price per kg * share)
     c = df['price_per_kg'].values
     
-    # Inequality constraints (A_ub * x <= b_ub)
     A_ub = [
-        df['fibre_pct'].values,      # Fibre constraint
-        -df['protein_pct'].values    # Protein constraint (negated)
+        df['fibre_pct'].values,      
+        -df['protein_pct'].values    
     ]
     b_ub = [max_fibre, -target_protein]
     
-    # Equality constraint (sum of shares = 1.0)
     A_eq = [np.ones(num_ingredients)]
     b_eq = [1.0]
     
-    # Bounds (0 to max_share for each ingredient)
     bounds = [(0, row['max_share']) for _, row in df.iterrows()]
     
-    # Run the HiGHS solver
     result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
     
     if result.success:
@@ -49,7 +44,7 @@ def optimize_blend(target_protein: float, max_fibre: float, batch_kg: float = 10
         
         blend_output = []
         for i, row in df.iterrows():
-            if blend_shares[i] > 0.001: # Filter out near-zero values
+            if blend_shares[i] > 0.001:
                 blend_output.append({
                     "ingredient": row['name'],
                     "share_pct": round(blend_shares[i] * 100, 1),
@@ -72,10 +67,9 @@ def optimize_blend(target_protein: float, max_fibre: float, batch_kg: float = 10
         }
 
 # ---------------------------------------------------------
-# 3. BLEND SIMULATION (Feature 5)
+# 3. BLEND SIMULATION (Feature 5) - Adding Mentor's Warning
 # ---------------------------------------------------------
 def simulate_blend(blend_dict: Dict[str, float]) -> Dict[str, Any]:
-    """Takes a dict of shares, e.g., {"Cowpea": 60, "Soybean meal": 30}"""
     if round(sum(blend_dict.values()), 2) != 100.0:
         return {"status": "error", "message": "Shares must sum to exactly 100%"}
         
@@ -96,18 +90,11 @@ def simulate_blend(blend_dict: Dict[str, float]) -> Dict[str, Any]:
         "status": "success",
         "achieved_protein_pct": round(total_protein, 2),
         "achieved_fibre_pct": round(total_fibre, 2),
-        "cost_per_kg": round(total_cost, 2)
+        "cost_per_kg": round(total_cost, 2),
+        "scientific_warning": "Nutrition and cost are exact weighted averages. Functional properties (e.g., WHC, gelation) may vary due to protein interactions and cannot be simply averaged."
     }
 
-# ---------------------------------------------------------
-# 4. TESTS (Only run when executing 'python engine.py')
-# ---------------------------------------------------------
 if __name__ == "__main__":
-    print("--- REQUEST A: Feasible (20% Protein, 8% Fibre) ---")
-    print(json.dumps(optimize_blend(target_protein=20.0, max_fibre=8.0), indent=2))
-    
-    print("\n--- REQUEST B: Infeasible (60% Protein, 8% Fibre) ---")
-    print(json.dumps(optimize_blend(target_protein=60.0, max_fibre=8.0), indent=2))
-
-    print("\n--- BLEND SIMULATION (Feature 5) ---")
-    print(json.dumps(simulate_blend({"Cowpea": 60, "Soybean meal": 30, "Groundnut cake": 10}), indent=2))
+    print("--- TESTING NEW PLANT-PROTEIN OPTIMISER ---")
+    # Request: 75% protein, max 2% fibre
+    print(json.dumps(optimize_blend(target_protein=75.0, max_fibre=2.0), indent=2))
