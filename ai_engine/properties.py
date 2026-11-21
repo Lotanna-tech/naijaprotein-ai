@@ -116,12 +116,11 @@ GROUP_LABELS = {
 }
 
 GROUP_NOTES = {
-    "proximate": "Dry-matter basis, except moisture. Values reported as-is are converted using the moisture of the same sample.",
-    "mineral": "Dry-matter basis.",
+    "proximate": "Per 100 g of dry flour, except moisture.",
+    "mineral": "Per 100 g of dry flour.",
     "amino_acid": "Grams per 100 g of protein.",
-    "functional": "How the ingredient behaves in a product. Results depend on the test method and conditions, so check "
-                  "the method before comparing studies. These properties do not simply average out in a blend.",
-    "biochemical": "Antinutrients and bioactive compounds. These affect nutrition and health, not water or oil binding.",
+    "functional": "How the flour behaves in a product. Results depend on how the test was done.",
+    "biochemical": "Compounds that affect nutrition, such as antinutrients.",
 }
 
 # measured  - your own laboratory measurement

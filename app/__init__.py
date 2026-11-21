@@ -1,4 +1,5 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import Config
@@ -7,6 +8,14 @@ from app.routes.admin import admin
 
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+ERROR_PAGES = {
+    400: ("Something is not right", "That request could not be handled. Please check what you entered."),
+    403: ("No access", "You do not have permission to see this page."),
+    404: ("Page not found", "We could not find that page."),
+    405: ("Not allowed", "That action is not available here."),
+    500: ("Something went wrong", "Please try again in a moment."),
+}
 
 
 class ProxyPrefixMiddleware:
@@ -76,16 +85,17 @@ def create_app():
     app.register_blueprint(api)
     app.register_blueprint(admin)
 
-    from app.services.formulation_service import get_engine
-
-    @app.context_processor
-    def inject_dataset_status():
-        # Lets every page show the "sample data" banner while values are unverified.
-        try:
-            return {"dataset_summary": get_engine()[0].summary()}
-        except Exception:  # never break page rendering over the banner
-            app.logger.exception("Could not load dataset summary")
-            return {"dataset_summary": None}
+    @app.errorhandler(HTTPException)
+    def handle_http_error(err):
+        """Friendly error pages; JSON for the API."""
+        custom = err.description != type(err).description
+        if request.path.startswith("/api/"):
+            return jsonify({"error": err.description if custom else ERROR_PAGES.get(err.code, ERROR_PAGES[500])[1]}), \
+                err.code
+        title, message = ERROR_PAGES.get(err.code, ERROR_PAGES[500])
+        if custom and err.code == 400:
+            message = err.description
+        return render_template("error.html", title=title, message=message), err.code
 
     @app.route("/")
     def dashboard():
@@ -102,6 +112,22 @@ def create_app():
               f"but not used; {s['verified_price_lots']} verified price lots")
         print("States with data:", ", ".join(s["states_with_data"]) or "none")
         print("States with prices:", ", ".join(s["states_with_prices"]) or "none")
+        pm = ds.price_model().summary()
+        if pm["usable"]:
+            pct = lambda v: "not checked" if v is None else f"{v:.0%}"
+            print(f"Price model: {pm['n_lots']} verified lots; typical error {pct(pm['unsurveyed_state_error'])} for "
+                  f"a state without a price survey, {pct(pm['missing_ingredient_error'])} for an ingredient "
+                  "missing in a surveyed state")
+        else:
+            print("Price model: not usable -", pm["reason"])
+        coverage = ds.state_coverage()
+        complete = [st for st, c in coverage.items() if c and all(e["complete"] for e in c.values())]
+        print(f"States where every ingredient has protein, moisture and a price (measured or estimated): "
+              f"{len(complete)} of {len(coverage)}")
+        for st, c in coverage.items():
+            gaps = {i: e["missing"] for i, e in c.items() if not e["complete"]}
+            if gaps:
+                print(f"  {st}: " + "; ".join(f"{i} has no {', '.join(m)}" for i, m in gaps.items()))
         for note in ds.excluded:
             print("  excluded:", note)
         if ds.issues:
@@ -110,5 +136,26 @@ def create_app():
                 print("  -", issue)
             raise SystemExit(1)
         print("No issues found.")
+
+    @app.cli.command("evaluate-ranking")
+    def evaluate_ranking():
+        """Backtest the ranking for states without data, on states that have their own measurements."""
+        from statistics import mean
+        from ai_engine.application import backtest
+        from ai_engine.dataset import Dataset
+        ds = Dataset(app.config["DATA_DIR"], app.config.get("INGREDIENT_SCOPE"))
+        rows = backtest(ds)
+        if not rows:
+            print("No state has its own measurements of every scored property for 3 or more ingredients.")
+            return
+        print("Each state's own measurements are hidden, its values are estimated from the other states, and the "
+              "ranking is compared with the one from its own data.")
+        for r in rows:
+            print(f"  {r['product']:8s} {r['state']:10s} {r['n_ingredients']} ingredients  "
+                  f"top pick {'same' if r['top_agrees'] else 'DIFFERENT'} ({r['own_top']})  "
+                  f"Kendall tau {r['kendall_tau']:.2f}  estimated chance the true top ranks first "
+                  f"{r['p_first_of_true_top']:.0%}")
+        print(f"Same top pick in {sum(r['top_agrees'] for r in rows)} of {len(rows)} tests; mean Kendall tau "
+              f"{mean(r['kendall_tau'] for r in rows):.2f}.")
 
     return app

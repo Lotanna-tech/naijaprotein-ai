@@ -20,6 +20,7 @@ The app reloads the files automatically when they change.
 | `product_targets.csv` | sourced nutrition target for a product | `product`, `property`, `min`, `max`, `source_id`, `notes` |
 | `archive/excluded_properties.csv` | removed row | as properties, plus `excluded_reason` |
 | `raw/` | original external files | kept unchanged |
+| `derived/state_values.csv` | value used for a state, ingredient and property (generated, not read by the app) | `state`, `ingredient_id`, `property`, `value`, `low`, `high`, `type`, `confidence`, `how_obtained`, `based_on_states`, `method` |
 
 Ingredient ids: `cowpea`, `bambara_groundnut`, `defatted_groundnut`,
 `african_yam_bean`, `soybean`. Any other id is rejected.
@@ -52,10 +53,29 @@ For composition, use where the material was **grown**. For prices, use where
 it was **bought**.
 
 A state's own records are always used first. For a state without records,
-the location model (`ai_engine/location_model.py`) gives an estimate only
-when its leave-one-state-out validation passes for that ingredient and
-property; otherwise the value is "not available". Values are never copied
-from another state or scaled by a factor.
+the location model (`ai_engine/location_model.py`) estimates the value from
+the other states: "checked" when its leave-one-state-out validation passes for
+that ingredient and property, otherwise a "rough estimate" with a wider range.
+A state without price lots gets a price from the price model
+(`ai_engine/price_model.py`). Estimates are always marked and are never
+written back into these files. Stock is never estimated.
+
+To see what every state gets, run `python scripts/export_state_values.py`. It
+writes `derived/state_values.csv` (one row per state, ingredient and property
+or price, with value, 95% range, type, confidence and method). The file is
+generated: do not edit it, and re-run the script after changing the data.
+
+## Checks and calculated values
+
+- **Carbohydrate by difference.** When a source does not report carbohydrate,
+  it is calculated for each sample: 100 − protein − fat − ash − fibre, on a
+  dry basis, and shown as "calculated". Fibre is subtracted, as in the
+  sources that report it (S003).
+- **Closure.** The dry-matter components of one sample may not exceed
+  100 g/100 g. Values labelled `dry` that only add up to 100 together with
+  moisture are reported as probably as-is. This found the S003 soybean table
+  (labelled dry matter, but protein + fat + ash + fibre + carbohydrate +
+  moisture = 100.0); those rows are now entered as `as_is`.
 
 ## Units and basis
 
@@ -78,7 +98,8 @@ defatted Bambara flour records are skipped (different ingredient forms).
 Composition location is the production origin state; price lots use the
 purchase state and market. For a state, the optimiser uses the lowest
 `max_blend_share_pct` among its lots as the default limit and the reported
-stock as an upper bound.
+stock as an upper bound. For a state with an estimated price it uses the
+lowest `max_blend_share_pct` across all verified lots and no stock limit.
 
 ## Blend experiments
 

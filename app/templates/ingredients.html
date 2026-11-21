@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import fmt, kind, loc_mark, state_form %}
+{% from "_macros.html" import fmt, state_form %}
 
 {% block title %}Ingredients | NaijaProtein AI{% endblock %}
 
@@ -7,13 +7,10 @@
 <section class="page">
 
     <div class="page-header">
-        <span class="eyebrow">INGREDIENT INTELLIGENCE</span>
-        <h1>What each protein ingredient can bring to a plant-based meat product.</h1>
-        <p>
-            Nutrition, how each ingredient behaves in a product (water and oil holding, binding, gelling),
-            biochemical characteristics, processing, price and stock, and the research behind every number.
-            Values are shown for the Nigerian state you choose.
-        </p>
+        <span class="eyebrow">INGREDIENTS</span>
+        <h1>What each protein can bring to a plant-based meat product.</h1>
+        <p>Nutrition, how each protein behaves in a product (water and oil binding, gelling), price and stock, with the
+           source of every number.</p>
     </div>
 
     {{ state_form(states, state_labels, coverage, location, url_for('catalogue.index'), {'q': args.get('q')}) }}
@@ -38,13 +35,17 @@
                         <div><strong>{{ fmt(ing.price.value, 0) if ing.price else '–' }}</strong><small>&#8358;/kg</small></div>
                     </div>
                     <p class="muted" style="font-size:13px">
-                        {% if st.available %}
-                            {{ st.measured }} measured value{{ 's' if st.measured != 1 }}{% if st.predicted %}, {{ st.predicted }} estimated{% endif %}
-                            {% if location %}for {{ location }}{% endif %}.
+                        {% if not st.available %}
+                            No data yet{% if location %} for {{ location }}{% endif %}.
+                        {% elif location and not st.measured %}
+                            Not measured in {{ location }} yet; values are estimated from other states.
+                        {% elif location %}
+                            {{ st.measured }} of {{ st.available }} values measured in {{ location }}.
                         {% else %}
-                            No verified data{% if location %} for {{ location }}{% endif %}.
+                            {{ st.measured }} measured values.
                         {% endif %}
-                        {% if not ing.price %}No verified price{% if location %} here{% endif %}.{% endif %}
+                        {% if not ing.price %}No price{% if location %} here{% endif %} yet.
+                        {% elif ing.price.kind == 'predicted' %}The price is an estimate.{% endif %}
                     </p>
                     <div class="actions">
                         <label><input type="checkbox" name="ids" value="{{ ing.id }}" checked> Compare</label>
@@ -67,11 +68,10 @@
     <div class="card" style="margin-top:30px">
         <h2>Where the data comes from</h2>
         <p class="muted">
-            {{ summary.verified_records }} verified values from {{ summary.states_with_data | length }} states
-            ({{ summary.states_with_data | join(', ') }}). Prices and stock are available for
-            {{ price_states | join(', ') or 'no states' }}.
-            {{ summary.unverified_records }} further values are marked as estimates or assumptions by their provider; they
-            are listed on each ingredient page but not used in any calculation.
+            {{ summary.verified_records }} checked values from {{ summary.states_with_data | length }} states
+            ({{ summary.states_with_data | join(', ') }}), and market prices and stock from
+            {{ price_states | join(', ') or 'no states' }}. For other states, values and prices are estimated from these
+            and marked <em>estimated</em>.
         </p>
     </div>
 </section>

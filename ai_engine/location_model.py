@@ -21,17 +21,26 @@ so a state with one record is not over-trusted. Environmental covariates
 (soil, rainfall, temperature) and variety/processing terms are not included
 because no such data is held; they can be added when it is.
 
-Use for states WITHOUT records: the model's estimate for an unseen state is
-mu, with uncertainty from tau^2 and the error of mu. It is used only if it
-passes leave-one-state-out validation: each state with data is held out in
-turn, mu is refitted on the others and compared with the held-out state's
-mean. It must have at least MIN_STATES states and a relative RMSE no larger
-than MAX_RELATIVE_ERROR. Otherwise the property is unavailable for that state.
+States WITHOUT records get mu, the value expected for a new state. Its
+uncertainty is the predictive standard deviation of a new state's mean,
+sqrt(tau^2 + Var(mu)). The estimate is checked by leave-one-state-out
+validation: each state with data is held out in turn, mu is refitted on the
+others and compared with the held-out state's mean.
+
+- "checked": at least MIN_STATES states and a relative RMSE no larger than
+  MAX_RELATIVE_ERROR (`predict_unseen`).
+- "indicative" (`estimate_unseen`): fewer states, or larger differences
+  between states. The value is still mu, but its standard deviation is the
+  largest of the model's own predictive SD, the leave-one-state-out error and
+  the typical relative error of the same property in other ingredients
+  (borrowing strength across ingredients when this one has few states). The
+  interval is therefore wide when the evidence is thin.
 
 Measured values for a state are always used as they are; the model never
 replaces them.
 """
 
+import math
 from dataclasses import dataclass, field
 from statistics import mean
 
@@ -39,6 +48,20 @@ import numpy as np
 
 MIN_STATES = 3
 MAX_RELATIVE_ERROR = 0.10
+Z95 = 1.96
+
+CHECKED = "checked"
+INDICATIVE = "indicative"
+
+UNCERTAINTY_LABELS = {
+    "model": "spread between the states with data",
+    "loso": "error when each state with data is predicted from the others",
+    "other_ingredients": "typical state-to-state error of this property in the other ingredients",
+    "largest_seen": "largest state-to-state error seen for any property (this one has not been checked "
+                    "between states)",
+    "resolution": "measurement step of the test (values are reported in fixed steps, so identical results "
+                  "do not mean identical samples)",
+}
 
 
 def _fit_components(groups):
@@ -62,6 +85,17 @@ def _fit_components(groups):
     return mu, tau2, sigma2, var_mu
 
 
+def _leave_one_state_out(groups):
+    """Predict each state's mean from the other states: (rmse, relative rmse)."""
+    errors = []
+    for s in groups:
+        rest = {k: v for k, v in groups.items() if k != s}
+        errors.append(mean(groups[s]) - _fit_components(rest)[0])
+    rmse = float(np.sqrt(np.mean(np.square(errors))))
+    mu = _fit_components(groups)[0]
+    return rmse, (rmse / abs(mu) if mu else float("inf"))
+
+
 @dataclass
 class LocationModel:
     key: str
@@ -77,10 +111,11 @@ class LocationModel:
     def validated(self):
         return bool(self.validation.get("validated"))
 
-    def summary(self):
+    def summary(self, prior_rel_sd=None, prior_basis="other_ingredients", floor_sd=0.0):
         icc = None
         if self.tau2 is not None and self.sigma2 is not None and (self.tau2 + self.sigma2) > 0:
             icc = self.tau2 / (self.tau2 + self.sigma2)
+        unseen = self.estimate_unseen(prior_rel_sd, prior_basis, floor_sd)
         return {
             "national_mean": None if self.mu is None else round(self.mu, 4),
             "between_state_sd": None if self.tau2 is None else round(self.tau2 ** 0.5, 4),
@@ -90,6 +125,8 @@ class LocationModel:
                            "state_effect": round(self.state_effects.get(s, 0.0), 4)}
                        for s, v in sorted(self.groups.items())},
             "validation": self.validation,
+            "unseen_state": None if unseen is None else {
+                k: (round(v, 4) if isinstance(v, float) else v) for k, v in unseen.items()},
             "covariates": "State effects only. No soil, climate or variety covariates are included because "
                           "that data is not held.",
         }
@@ -99,7 +136,34 @@ class LocationModel:
         if not self.validated:
             return None
         sd = max((self.tau2 + self.var_mu) ** 0.5, self.validation["loso_rmse"])
-        return {"value": self.mu, "low": self.mu - 1.96 * sd, "high": self.mu + 1.96 * sd}
+        return {"value": self.mu, "low": self.mu - Z95 * sd, "high": self.mu + Z95 * sd}
+
+    def estimate_unseen(self, prior_rel_sd=None, prior_basis="other_ingredients", floor_sd=0.0):
+        """Estimate for a state without records, graded 'checked' or 'indicative'.
+
+        prior_rel_sd: relative error borrowed from other ingredients or properties
+        (prior_basis names which, see UNCERTAINTY_LABELS). floor_sd: smallest credible
+        standard deviation, e.g. half the step in which a test reports its results.
+        Returns None only when there are no records, or when nothing indicates how much
+        the property varies between states (one state, one record, nothing to learn from).
+        """
+        if self.mu is None:
+            return None
+        candidates = {"model": math.sqrt(max(self.tau2 + self.var_mu, 0.0))}
+        if self.validation.get("loso_rmse") is not None:
+            candidates["loso"] = self.validation["loso_rmse"]
+        # A checked model needs no help from other ingredients; it is validated on its own states.
+        if prior_rel_sd and not self.validated:
+            candidates[prior_basis] = prior_rel_sd * abs(self.mu)
+        if floor_sd and floor_sd > 0:
+            candidates["resolution"] = floor_sd
+        basis, sd = max(candidates.items(), key=lambda kv: kv[1])
+        if sd <= 0:
+            return None
+        return {"value": self.mu, "low": max(0.0, self.mu - Z95 * sd), "high": self.mu + Z95 * sd, "sd": sd,
+                "relative_sd": sd / abs(self.mu) if self.mu else None,
+                "confidence": CHECKED if self.validated else INDICATIVE,
+                "uncertainty_from": basis, "reason": self.validation.get("reason", "")}
 
 
 def fit(key, groups):
@@ -125,14 +189,11 @@ def fit(key, groups):
             "reason": f"Verified data from {n_states} state(s); at least {MIN_STATES} are needed to check how well "
                       "the national value represents a state without data.",
         }
+        if n_states >= 2:
+            rmse, rel = _leave_one_state_out(groups)
+            model.validation.update({"loso_rmse": round(rmse, 4), "relative_error": round(rel, 4)})
         return model
-    errors = []
-    for s in groups:
-        rest = {k: v for k, v in groups.items() if k != s}
-        mu_rest = _fit_components(rest)[0]
-        errors.append(mean(groups[s]) - mu_rest)
-    rmse = float(np.sqrt(np.mean(np.square(errors))))
-    rel = rmse / abs(model.mu) if model.mu else float("inf")
+    rmse, rel = _leave_one_state_out(groups)
     ok = rel <= MAX_RELATIVE_ERROR
     model.validation = {
         "validated": ok, "n_states": n_states, "loso_rmse": round(rmse, 4), "relative_error": round(rel, 4),
@@ -140,6 +201,6 @@ def fit(key, groups):
         "reason": ("" if ok else
                    f"Leaving out one state at a time, the national value missed the state's value by "
                    f"{rel:.0%} on average (limit {MAX_RELATIVE_ERROR:.0%}); state differences are too large "
-                   "to estimate a state without data."),
+                   "for a checked estimate."),
     }
     return model

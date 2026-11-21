@@ -5,26 +5,28 @@
 {% block content %}
 <section class="page" data-saved-detail data-kind="{{ f.kind }}">
     <div class="page-header">
-        <a class="muted" href="{{ url_for('formulations.history') }}">&larr; Saved recipes</a>
+        <a class="muted" href="{{ url_for('formulations.history') }}">&larr; Saved blends</a>
         <h1>{{ f.name }}</h1>
-        <p>{{ 'Optimised' if f.kind == 'optimisation' else 'Simulated' }} recipe saved {{ f.created_at.strftime('%d %b %Y, %H:%M') }}.
-           Values are as they were when saved.</p>
+        <p>{{ 'Optimised' if f.kind == 'optimisation' else 'Simulated' }} on {{ f.created_at.strftime('%d %b %Y, %H:%M') }}.
+           The results are as they were then.</p>
     </div>
 
     {% if req.product is defined %}
     <div class="card">
         <h2>What you asked for</h2>
-        <p class="muted">Product: {{ req.product }} &middot; State: {{ req.location or 'all of Nigeria' }}
-            {% if req.batch_kg %}&middot; Batch {{ req.batch_kg }} kg{% endif %}
-            {% if req.budget %}&middot; Budget &#8358;{{ '{:,.0f}'.format(req.budget) }}{% endif %}</p>
-        {% if req.targets %}<p class="muted">Targets: {% for k, t in req.targets.items() %}{{ k | replace('_', ' ') }}
-            {% if t.min is not none %}&ge; {{ t.min }}{% endif %}{% if t.max is not none %} &le; {{ t.max }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+        <ul class="explain-list">
+            <li>{{ product_name or req.product }}{% if req.location %} in {{ req.location }}{% else %}, all of Nigeria{% endif %}{% if req.batch_kg %}, {{ '{:,.4g}'.format(req.batch_kg) }} kg batch{% endif %}{% if req.budget %}, budget &#8358;{{ '{:,.0f}'.format(req.budget) }}{% endif %}.</li>
+            {% if req.recipe %}<li>Blend: {% for k, v in req.recipe.items() %}{{ '{:g}'.format(v) }}% {{ names.get(k, k) }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
+            {% if req.ingredient_ids %}<li>Proteins considered: {% for k in req.ingredient_ids %}{{ names.get(k, k) }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
+            {% if req.baseline %}<li>Compared with: {% for k, v in req.baseline.items() %}{{ '{:g}'.format(v) }}% {{ names.get(k, k) }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
+            {% if req.importance %}<li>Your importance settings: {% for k, v in req.importance.items() %}{{ labels.get(k, k) | lower }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>{% endif %}
+        </ul>
     </div>
     <div class="card" id="detailResult"></div>
     <script type="application/json" id="savedData">{{ data | tojson }}</script>
     {% else %}
     <div class="card"><p class="muted">This run was saved by an earlier version of NaijaProtein AI and cannot be shown
-        in the current format. Run it again to see it with the current data.</p></div>
+        any more. Run it again to see it with the current data.</p></div>
     {% endif %}
 </section>
 {% endblock %}

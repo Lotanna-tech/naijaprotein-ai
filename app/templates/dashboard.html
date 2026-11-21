@@ -42,14 +42,15 @@
         </h1>
 
         <p>
-            NaijaProtein AI helps food technologists and producers choose, combine and optimise cowpea,
-            Bambara groundnut, defatted groundnut, African yam bean and soybean for plant-based beef,
-            chicken, meat chunks and sausages, using measured data from Nigerian states.
+            NaijaProtein AI ranks cowpea, Bambara groundnut, defatted groundnut, African yam bean and soybean
+            for the plant-based beef, chicken, meat chunks or sausages you want to make. It recommends the best
+            blend, says how certain it is, and gives you a short list to take to the laboratory, using measured
+            data from Nigerian states.
         </p>
 
         <div class="hero-buttons">
-            <a href="{{ url_for('formulations.simulate') if current_user.is_authenticated else url_for('auth.login') }}" class="primary-btn">
-                Simulate a recipe <span>&rarr;</span>
+            <a href="{{ url_for('formulations.index') if current_user.is_authenticated else url_for('auth.login', next=url_for('formulations.index')) }}" class="primary-btn">
+                Rank my plant proteins <span>&rarr;</span>
             </a>
             <a href="{{ url_for('catalogue.index') }}" class="secondary-btn">
                 Explore the ingredients
@@ -57,7 +58,7 @@
         </div>
 
         <div class="hero-note">
-            Results are computational estimates to guide laboratory and product trials.
+            Results are estimates to help you decide what to test in the lab.
         </div>
 
     </div>
@@ -73,8 +74,8 @@
         <div class="floating-card">
             <span class="floating-icon">✳</span>
             <div>
-                <strong>Lowest-cost recipes</strong>
-                <small>Using prices and stock by state</small>
+                <strong>Ranked for your product</strong>
+                <small>And how sure we are</small>
             </div>
         </div>
 
@@ -196,27 +197,26 @@
     <div class="solutions-grid">
         <a class="solution-card" href="{{ url_for('catalogue.index') }}">
             <div class="solution-icon">&#9672;</div>
-            <h3>Ingredient Intelligence</h3>
-            <p>Nutrition, functional properties, biochemical characteristics, processing, price and stock for each
-               ingredient, by Nigerian state, with the research behind every value.</p>
+            <h3>Ingredients</h3>
+            <p>What each protein brings: nutrition, how it behaves in a product, price and stock in your state, and
+               where every number comes from.</p>
         </a>
         <a class="solution-card" href="{{ url_for('formulations.simulate') }}">
             <div class="solution-icon">&#8599;</div>
-            <h3>Simulate a recipe</h3>
-            <p>Pick your product and state, set the amount of each ingredient, water and oil, and see the nutrition,
-               cost, stock and how well it meets your targets.</p>
+            <h3>Simulate a blend</h3>
+            <p>Pick your product, state and how much of each protein. See how well the blend suits the product, its
+               protein, cost and how much water and oil it can hold, and how sure we are.</p>
         </a>
         <a class="solution-card" href="{{ url_for('formulations.index') }}">
-            <div class="solution-icon">&#8358;</div>
-            <h3>Optimise a recipe</h3>
-            <p>Set your requirements and budget. The optimiser finds the lowest-cost recipe that meets them, or explains
-               why none can.</p>
+            <div class="solution-icon">&#9733;</div>
+            <h3>Rank and optimise with AI</h3>
+            <p>Select the proteins. The AI knows what matters for your product, ranks the proteins, recommends the
+               best blend and plans your lab tests.</p>
         </a>
         <article class="solution-card">
             <div class="solution-icon">&#8984;</div>
-            <h3>Clear explanations</h3>
-            <p>Why each ingredient was chosen, what water and oil change, how cost and stock shaped the answer, and which
-               values are measured, calculated or estimated.</p>
+            <h3>Certainty card</h3>
+            <p>How sure the AI is, which values were measured and what could change the answer.</p>
         </article>
     </div>
 
@@ -231,7 +231,7 @@
 
         <h2>Start from the product you want to make.</h2>
 
-        <p>Each product needs different properties. Your choice decides which properties are highlighted and checked.</p>
+        <p>Each product needs different properties. Your choice sets which properties the AI weighs, and how much.</p>
 
         <div class="steps">
             <div class="step"><span>01</span><div><h3>Plant-based beef</h3><p>Burger patties and mince: binding, firmness, juiciness, fat retention.</p></div></div>
@@ -240,7 +240,7 @@
             <div class="step"><span>04</span><div><h3>Plant-based sausages</h3><p>Stable emulsion, gel that sets firm, water and oil retention.</p></div></div>
         </div>
 
-        <a href="{{ url_for('formulations.simulate') if current_user.is_authenticated else url_for('auth.login') }}" class="primary-btn">
+        <a href="{{ url_for('formulations.index') if current_user.is_authenticated else url_for('auth.login', next=url_for('formulations.index')) }}" class="primary-btn">
             Get started &rarr;
         </a>
 
@@ -251,8 +251,8 @@
             <span class="eyebrow">ALL OF NIGERIA</span>
             <div class="nutrition-symbol">&#10035;</div>
             <h3>36 states and the FCT</h3>
-            <p>Choose where your ingredients come from. Measurements from that state are used, and the app tells you
-               when a state has no data.</p>
+            <p>Choose where your ingredients come from. Measurements from that state are used; where a state has none,
+               values and prices are estimated from the other states and clearly marked.</p>
             <div class="nutrition-line"></div>
             <small>NaijaProtein AI</small>
         </div>

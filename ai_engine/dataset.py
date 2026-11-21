@@ -19,6 +19,18 @@ Data rules:
 - Only verified records (status measured or sourced) are used in
   calculations. Provider estimates and assumptions are kept and shown as
   "not verified", but never used.
+- Carbohydrate not reported by a source is calculated by difference for each
+  sample: 100 - protein - fat - ash - fibre (dry basis), and shown as
+  "calculated".
+- Composition must close: the dry-matter components of a sample cannot add up
+  to more than 100 g/100 g, and values labelled dry basis that only reach 100
+  together with moisture are reported as probably as-is.
+
+For a single state (`view`), a state's own verified records come first. A
+state without records gets an estimate from the other states (location
+model), and a state without price lots gets an estimated price (price model).
+Every estimate is marked, carries a 95% interval and is graded "checked" or
+"indicative".
 """
 
 import copy
@@ -27,7 +39,10 @@ import os
 from dataclasses import dataclass, field, replace
 from statistics import mean
 
+import numpy as np
+
 from ai_engine import location_model
+from ai_engine import price_model
 from ai_engine import properties as P
 from ai_engine.locations import NIGERIA_STATES, normalise_state, parse_location
 
@@ -35,13 +50,21 @@ from ai_engine.locations import NIGERIA_STATES, normalise_state, parse_location
 # logic and are never stored in the CSV files.
 STATUS_RANK = {"assumed": 0, "estimated": 1, "predicted": 2, "sourced": 3, "measured": 4}
 
-# How the value shown for a location was obtained.
+# How the value shown for a location was obtained (used in data exports).
 LOCATION_STATUS_LABELS = {
     "national": "all Nigerian data combined",
-    "selected": "measured in the selected state",
-    "location_model": "estimated for this state from other states' data (no measurements here)",
-    "predicted": "estimated from this ingredient's composition (not measured)",
+    "selected": "measured in this state",
+    "location_model": "estimated from other states",
+    "price_model": "price estimated from other states",
+    "predicted": "estimated from the ingredient's composition",
 }
+
+MIN_STATES_FOR_CHECK = location_model.MIN_STATES
+
+# Carbohydrate by difference, on a dry basis, from these components of the same sample.
+CARBOHYDRATE_COMPONENTS = ("protein", "fat", "ash", "fibre")
+CARBOHYDRATE_METHOD = "Calculated by difference: 100 - protein - fat - ash - fibre (dry basis)"
+CLOSURE_TOLERANCE = 0.5  # g/100 g
 
 REQUIRED_FILES = (
     "ingredients.csv",
@@ -72,6 +95,7 @@ class ValueRecord:
     variety: str = ""
     state: str = ""
     site: str = ""
+    derived: bool = False          # calculated from other values of the same sample (not reported)
 
 
 @dataclass
@@ -99,8 +123,19 @@ class AggregatedValue:
 
     @property
     def kind(self):
-        """measured / predicted, as shown to users."""
-        return "predicted" if self.status == "predicted" else "measured"
+        """measured / calculated / predicted, as shown to users."""
+        if self.status == "predicted":
+            return "predicted"
+        if self.records and all(r.derived for r in self.records):
+            return "calculated"
+        return "measured"
+
+    @property
+    def confidence(self):
+        """'measured' or 'calculated' for recorded data; for estimates 'checked' or 'indicative'."""
+        if self.status != "predicted":
+            return self.kind
+        return (self.prediction or {}).get("confidence", location_model.CHECKED)
 
     def to_dict(self, sources=None):
         d = {
@@ -114,6 +149,7 @@ class AggregatedValue:
             "n_records": self.n,
             "status": self.status,
             "kind": self.kind,
+            "confidence": self.confidence,
             "basis": self.basis,
             "source_ids": self.source_ids,
             "location_status": self.location_status,
@@ -125,7 +161,7 @@ class AggregatedValue:
                 {k: getattr(r, k) for k in ("value", "unit", "basis", "method", "processing", "source_id",
                                              "status", "notes", "converted_from_as_is", "reported_value",
                                              "reported_unit", "conversion_note", "sample", "location",
-                                             "variety", "state", "site")}
+                                             "variety", "state", "site", "derived")}
                 for r in self.records
             ],
         }
@@ -149,14 +185,25 @@ class PriceInfo:
     availability_kg: float = None   # total stock reported for the lots used
     max_share: float = None         # most restrictive max share of the protein blend (0..1)
     lots: list = field(default_factory=list)
+    prediction: dict = None         # price model details when the price is estimated
+
+    @property
+    def kind(self):
+        return "predicted" if self.status == "predicted" else "measured"
+
+    @property
+    def confidence(self):
+        return (self.prediction or {}).get("confidence", "measured") if self.status == "predicted" else "measured"
 
     def to_dict(self):
         return {
             "value": round(self.value, 2), "low": round(self.low, 2), "high": round(self.high, 2),
-            "unit": "NGN/kg", "n_records": self.n, "status": self.status, "latest_date": self.latest_date,
+            "unit": "NGN/kg", "n_records": self.n, "status": self.status, "kind": self.kind,
+            "confidence": self.confidence, "latest_date": self.latest_date,
             "markets": self.markets, "source_ids": self.source_ids, "location_status": self.location_status,
             "location_note": LOCATION_STATUS_LABELS.get(self.location_status, ""), "states": self.states,
             "availability_kg": self.availability_kg, "max_share": self.max_share, "lots": self.lots,
+            "prediction": self.prediction,
         }
 
 
@@ -283,6 +330,8 @@ class Dataset:
         self.issues = []           # problems in the files; rows with errors are skipped
         self.excluded = []         # rows deliberately left out (scope), not errors
         self._models = {}
+        self._priors = None
+        self._price_model = None
         self._load()
 
     # ------------------------------------------------------------------ load
@@ -421,6 +470,10 @@ class Dataset:
                                     conversion_note="; ".join(x for x in (r.conversion_note, note) if x))
                     converted.append(r)
                 recs = converted
+            raw[(iid, key)] = recs
+
+        self._check_closure_and_derive_carbohydrate(raw)
+        for (iid, key), recs in raw.items():
             for r in recs:
                 bucket = self.records if r.status in P.VERIFIED_STATUSES else self.unverified
                 bucket.setdefault((iid, key), []).append(r)
@@ -428,6 +481,49 @@ class Dataset:
         for (iid, key), recs in self.records.items():
             self.ingredients[iid].values[key] = self._aggregate(
                 key, recs, "national", len(self.unverified.get((iid, key), [])))
+
+    def _check_closure_and_derive_carbohydrate(self, recs_by_key):
+        """Per sample: check that the composition adds up, and calculate missing carbohydrate.
+
+        recs_by_key: {(ingredient, property): [ValueRecord]} after conversion to dry basis.
+        A sample is one material in one source: same source, sample label, location and processing.
+        """
+        keys = CARBOHYDRATE_COMPONENTS + ("carbohydrate", "moisture")
+        samples = {}
+        for (iid, key), recs in recs_by_key.items():
+            if key not in keys:
+                continue
+            for r in recs:
+                sk = (iid, r.source_id, r.sample, r.location, r.processing)
+                samples.setdefault(sk, {}).setdefault(key, []).append(r)
+        for (iid, sid, sample, _, _), by_key in samples.items():
+            if any(len(v) > 1 for v in by_key.values()):
+                continue  # several values for one sample label: cannot tell which belong together
+            got = {k: v[0] for k, v in by_key.items()}
+            label = f"{iid} sample '{sample}' from {sid}"
+            parts = [k for k in CARBOHYDRATE_COMPONENTS + ("carbohydrate",) if k in got]
+            dry_sum = sum(got[k].value for k in parts)
+            if dry_sum > 100 + CLOSURE_TOLERANCE:
+                self.issues.append(f"{label}: {', '.join(parts)} add up to {dry_sum:.2f} g/100 g dry matter, more "
+                                   "than 100; check the values and their basis")
+                continue
+            # Labelled dry, but only reaching 100 with moisture added: the table is most likely as-is.
+            if (len(parts) == 5 and "moisture" in got and not any(got[k].converted_from_as_is for k in parts)
+                    and abs(dry_sum + got["moisture"].value - 100) <= CLOSURE_TOLERANCE
+                    and abs(dry_sum - 100) > 2 * CLOSURE_TOLERANCE):
+                self.issues.append(f"{label}: values labelled dry basis add up to 100 only together with moisture "
+                                   f"({dry_sum:.2f} + {got['moisture'].value:.2f}); they look like as-is values, so "
+                                   "set basis to as_is")
+            if "carbohydrate" in got or not all(k in got for k in CARBOHYDRATE_COMPONENTS):
+                continue
+            inputs = [got[k] for k in CARBOHYDRATE_COMPONENTS]
+            base = inputs[0]
+            recs_by_key.setdefault((iid, "carbohydrate"), []).append(replace(
+                base, value=100 - dry_sum, unit=P.get("carbohydrate").unit, basis=P.DRY_BASIS,
+                method=CARBOHYDRATE_METHOD, status=min((r.status for r in inputs), key=STATUS_RANK.get),
+                notes="Not reported by the source; calculated from this sample's protein, fat, ash and fibre.",
+                converted_from_as_is=False, reported_value=None, reported_unit="", conversion_note="",
+                derived=True))
 
     @staticmethod
     def _aggregate(key, recs, location_status, unverified=0):
@@ -548,6 +644,108 @@ class Dataset:
             self._models[(iid, key)] = location_model.fit(key, groups)
         return self._models[(iid, key)]
 
+    def location_prior(self, key):
+        """(relative error, basis) borrowed for a state without data, for one property.
+
+        The median leave-one-state-out relative error of this property over the ingredients that
+        can be checked (2+ states). For a property never checked in any ingredient, the largest
+        relative error seen for any property is used, so thin evidence gives a wide interval.
+        """
+        if self._priors is None:
+            by_key = {}
+            for (iid, k) in self.records:
+                rel = self.location_model(iid, k).validation.get("relative_error")
+                if rel is not None and np.isfinite(rel):
+                    by_key.setdefault(k, []).append(rel)
+            every = [x for xs in by_key.values() for x in xs]
+            self._priors = ({k: float(np.median(xs)) for k, xs in by_key.items()},
+                            max(every) if every else None)
+        per_key, fallback = self._priors
+        if per_key.get(key):  # a median of 0 only means the states agreed in the tests so far
+            return per_key[key], "other_ingredients"
+        return fallback, "largest_seen"
+
+    def measurement_step(self, key):
+        """Smallest difference between distinct verified values of a property, e.g. 2 for least gelation
+        (reported in steps of 2% w/v). Results within one step can come from different samples."""
+        values = sorted({round(r.value, 6) for (_, k), recs in self.records.items() if k == key for r in recs})
+        steps = [b - a for a, b in zip(values, values[1:]) if b - a > 1e-9]
+        return min(steps) if steps else 0.0
+
+    def location_summary(self, iid, key):
+        """Location model summary for one ingredient property, including the estimate for a new state."""
+        return self.location_model(iid, key).summary(*self.location_prior(key), self.measurement_step(key) / 2)
+
+    def price_model(self):
+        """Price model fitted on every verified lot (cached)."""
+        if self._price_model is None:
+            lots = [(iid, st, p, row.get("price_date", ""))
+                    for iid, items in self.price_records.items() for p, row, _, st in items]
+            self._price_model = price_model.fit(lots)
+        return self._price_model
+
+    def national_max_share(self, iid):
+        """Most restrictive supplier max share among all verified lots of an ingredient (0..1)."""
+        shares = [s for s in (_float(r.get("max_blend_share_pct")) for _, r, _, _ in self.price_records.get(iid, []))
+                  if s is not None]
+        return min(shares) / 100 if shares else None
+
+    def _location_estimate(self, iid, key, recs):
+        """AggregatedValue for a state without records of this property, or (None, reason)."""
+        model = self.location_model(iid, key)
+        est = model.estimate_unseen(*self.location_prior(key), self.measurement_step(key) / 2)
+        if est is None:
+            return None, (f"only measured in {', '.join(sorted(model.groups))}, and the data give no measure of how "
+                          "much it varies from state to state")
+        checked = est["confidence"] == location_model.CHECKED
+        n_states = model.validation["n_states"]
+        states = f"{n_states} other state{'s' if n_states != 1 else ''}"
+        note = (f"Not measured here; estimated from {states}." if checked else
+                f"Not measured here; a rough estimate from {states}"
+                + (", which differ a lot." if n_states >= MIN_STATES_FOR_CHECK else "."))
+        prediction = {
+            "method": "national value from the states with data (random-effects model)"
+                      + (", checked by leaving out one state at a time" if checked else ""),
+            "confidence": est["confidence"], "n_training": len(recs), "n_states": n_states,
+            "relative_error": model.validation.get("relative_error"),
+            "relative_sd": None if est["relative_sd"] is None else round(est["relative_sd"], 4),
+            "uncertainty_from": location_model.UNCERTAINTY_LABELS[est["uncertainty_from"]],
+            "training_states": sorted(model.groups), "reason": est["reason"], "note": note,
+        }
+        return AggregatedValue(key, est["value"], est["low"], est["high"], 0, "predicted", recs[0].basis, [],
+                               "location_model", prediction=prediction), ""
+
+    def _estimated_price(self, ing, state):
+        """PriceInfo estimated by the price model, or (None, reason)."""
+        model = self.price_model()
+        est = model.estimate(ing.id, state)
+        if est is None:
+            return None, model.refusal(ing.id, state)
+        name = ing.name.lower()
+        join = lambda xs: xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
+        if est["case"] == "missing_ingredient":
+            note = (f"No market price for {name} was collected in {state}. Estimated from what other proteins cost "
+                    f"in {state} and what {name} costs in {join(est['ingredient_states'])}. It may cost more if it "
+                    "is not grown nearby.")
+        else:
+            note = (f"No market prices were collected in {state}. Estimated from prices in "
+                    f"{join(list(est['weights']))}, giving nearer states more weight.")
+        # Cross-check only: unverified lots never set a price, but if they fall outside the
+        # estimate's range, the estimate is not called checked.
+        unverified = [p for p, _, _, st in self.unverified_prices.get(ing.id, []) if st == state]
+        if unverified:
+            avg = mean(unverified)
+            est["unverified_lots"] = {"n": len(unverified), "mean": round(avg, 2)}
+            if not est["low"] <= avg <= est["high"]:
+                est["confidence"] = location_model.INDICATIVE
+                note += (f" Unconfirmed prices from the data provider are about \u20a6{avg:,.0f}/kg, so get a local "
+                         "quote.")
+        est = {**est, "note": note, "stock_note": f"Stock is not known for {state}; check with suppliers."}
+        return PriceInfo(value=est["value"], low=est["low"], high=est["high"], n=0, status="predicted",
+                         latest_date=est["period"][1], markets=[], source_ids=[], location_status="price_model",
+                         states=est["training_states"], availability_kg=None,
+                         max_share=self.national_max_share(ing.id), lots=[], prediction=est), ""
+
     def coverage(self):
         """Which states have verified data, per ingredient: {state: {ingredient: n_records}}."""
         out = {s: {} for s in NIGERIA_STATES}
@@ -563,9 +761,11 @@ class Dataset:
         """A copy of the dataset with values chosen for one Nigerian state.
 
         For each ingredient property: verified measurements from that state if
-        any; otherwise the location model's estimate for a state without data,
-        if the model passed validation; otherwise unavailable. Prices and stock
-        come only from lots sold in that state. Nothing is scaled or invented.
+        any; otherwise the location model's estimate from the other states
+        (graded checked or indicative, with a 95% interval). Prices and stock
+        come from lots sold in that state; without a lot, the price is
+        estimated by the price model and stock is unknown. Measured values are
+        never replaced, and every estimate is marked as such.
         """
         if not state:
             return self
@@ -576,6 +776,7 @@ class Dataset:
         view.location = canonical
         view.ingredients = {}
         view.location_refusals = {}
+        view.price_refusals = {}
         for iid, ing in self.ingredients.items():
             values = {}
             for key in P.PROPERTIES:
@@ -585,26 +786,59 @@ class Dataset:
                 if here:
                     values[key] = self._aggregate(key, here, "selected", n_unverified)
                 elif recs:
-                    model = self.location_model(iid, key)
-                    est = model.predict_unseen()
-                    if est is None:
-                        view.location_refusals[(iid, key)] = model.validation.get("reason", "")
-                        continue
-                    values[key] = AggregatedValue(
-                        key, est["value"], est["low"], est["high"], 0, "predicted", recs[0].basis, [],
-                        "location_model",
-                        prediction={"method": "location model (national value, checked by leaving out one "
-                                              "state at a time)",
-                                    "n_training": len(recs), "n_states": model.validation["n_states"],
-                                    "relative_error": model.validation["relative_error"],
-                                    "training_states": sorted(model.groups),
-                                    "note": "No measurements from this state. Estimated from other states."})
-            price = None
+                    value, reason = self._location_estimate(iid, key, recs)
+                    if value is None:
+                        view.location_refusals[(iid, key)] = reason
+                    else:
+                        values[key] = value
             lots = [it for it in self.price_records.get(iid, []) if it[3] == canonical]
             if lots:
                 price = self._price_info(lots, "selected")
+            else:
+                price, reason = self._estimated_price(ing, canonical)
+                if price is None:
+                    view.price_refusals[iid] = reason
             view.ingredients[iid] = replace(ing, values=values, price=price)
         return view
+
+    def without_state(self, state):
+        """A copy without one state's verified records and price lots, for checking estimates (backtests)."""
+        canonical = normalise_state(state)
+        out = copy.copy(self)
+        out.records = {k: kept for k, recs in self.records.items()
+                       if (kept := [r for r in recs if r.state != canonical])}
+        out.price_records = {k: kept for k, items in self.price_records.items()
+                             if (kept := [it for it in items if it[3] != canonical])}
+        out._models, out._priors, out._price_model = {}, None, None
+        out.ingredients = {}
+        for iid, ing in self.ingredients.items():
+            values = {key: self._aggregate(key, recs, "national") for (i, key), recs in out.records.items()
+                      if i == iid}
+            price = self._price_info(out.price_records[iid], "national") if iid in out.price_records else None
+            out.ingredients[iid] = replace(ing, values=values, price=price)
+        return out
+
+    def state_coverage(self, keys=("protein", "moisture")):
+        """For every state: per ingredient, whether `keys` and a price are available, and how.
+
+        {state: {ingredient: {"complete": bool, "measured": [...], "estimated": [...], "missing": [...]}}}
+        """
+        out = {}
+        for st in NIGERIA_STATES:
+            v = self.view(st)
+            out[st] = {}
+            for iid, ing in v.ingredients.items():
+                entry = {"measured": [], "estimated": [], "missing": []}
+                for k in keys:
+                    val = ing.values.get(k)
+                    entry["missing" if val is None else "estimated" if val.status == "predicted"
+                          else "measured"].append(k)
+                p = ing.price
+                entry["missing" if p is None else "estimated" if p.status == "predicted" else "measured"].append(
+                    "price")
+                entry["complete"] = not entry["missing"]
+                out[st][iid] = entry
+        return out
 
     # ---------------------------------------------------------------- query
     def list(self, q=None, category=None, min_protein=None):

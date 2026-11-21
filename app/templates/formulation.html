@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Optimise a formulation | NaijaProtein AI{% endblock %}
+{% block title %}Optimise a blend | NaijaProtein AI{% endblock %}
 
 {% block content %}
 <section class="page" data-page="optimise"
@@ -8,17 +8,18 @@
          data-detail-url="{{ url_for('formulations.detail', formulation_id=0) }}">
 
     <div class="page-header">
-        <span class="eyebrow">OPTIMISE A FORMULATION</span>
-        <h1>Tell us what you need. We find the cheapest recipe that delivers it.</h1>
-        <p>The optimiser searches all combinations of your chosen ingredients, water and oil for the lowest cost that
-           meets your requirements, using prices and stock from the state you choose. If no recipe can meet them, it
-           tells you why.</p>
+        <span class="eyebrow">OPTIMISE A BLEND</span>
+        <h1>Pick your plant proteins. The AI ranks them and finds the best blend.</h1>
+        <p>Tell us what you are making. The AI knows which properties matter for it (for example, holding fat in a
+           burger that is cooked), ranks your proteins, recommends how much of each to use and tells you how sure it
+           is. You get a short list to test in the lab.</p>
     </div>
 
     <form id="optForm" class="steps-form" novalidate>
         <div class="card step">
             <h2><span class="step-no">1</span> What are you making?</h2>
             <div class="product-choices" data-products></div>
+            <div data-criteria></div>
         </div>
 
         <div class="card step">
@@ -26,66 +27,19 @@
             <div class="field">
                 <label for="location">Nigerian state</label>
                 <select id="location" name="location" data-states></select>
-                <small>Optimisation needs verified prices, so only states with price data can produce a recipe.</small>
+                <small>We use values and prices from this state. Where there are none, we estimate them from other
+                    states.</small>
             </div>
         </div>
 
         <div class="card step">
-            <h2><span class="step-no">3</span> Choose the protein ingredients you want to use</h2>
-            <p class="muted">Optionally limit each one as a share of the protein ingredients. Leave the maximum blank to use the
-                supplier's limit for that state.</p>
-            <div class="table-wrap">
-                <table class="data-table limits-table">
-                    <thead><tr><th>Use</th><th>Ingredient</th><th>At least (%)</th><th>At most (%)</th></tr></thead>
-                    <tbody data-ingredient-limits></tbody>
-                </table>
-            </div>
+            <h2><span class="step-no">3</span> Choose the plant proteins to consider</h2>
+            <div class="product-choices" data-ingredient-choices></div>
+            <div id="baselineNote"></div>
         </div>
 
         <div class="card step">
-            <h2><span class="step-no">4</span> Water and oil</h2>
-            <div class="layout-inline">
-                <fieldset class="field">
-                    <label><input type="checkbox" id="useWater" checked> Add water</label>
-                    <div class="layout-inline">
-                        <input type="number" id="waterMin" min="0" max="100" step="any" placeholder="min %" aria-label="Minimum water %">
-                        <input type="number" id="waterMax" min="0" max="100" step="any" value="40" aria-label="Maximum water %">
-                    </div>
-                    <small>How much water would you like to add, as % of the mix (min and max).</small>
-                </fieldset>
-                <fieldset class="field">
-                    <label><input type="checkbox" id="useOil" checked> Add edible oil</label>
-                    <div class="layout-inline">
-                        <input type="number" id="oilMin" min="0" max="100" step="any" placeholder="min %" aria-label="Minimum oil %">
-                        <input type="number" id="oilMax" min="0" max="100" step="any" value="10" aria-label="Maximum oil %">
-                    </div>
-                    <small>How much oil would you like to add, as % of the mix (min and max).</small>
-                </fieldset>
-            </div>
-            <label class="muted"><input type="checkbox" id="holdingRule"> Don't add more water than the ingredients can each hold
-                (a rough rule that ignores how ingredients affect each other)</label>
-            <div class="layout-inline" style="margin-top:10px">
-                <div class="field"><label for="waterPrice">Water price (&#8358;/kg)</label><input type="number" id="waterPrice" min="0" step="any" placeholder="not costed"></div>
-                <div class="field"><label for="oilPrice">Oil price (&#8358;/kg)</label><input type="number" id="oilPrice" min="0" step="any" placeholder="not costed"></div>
-            </div>
-            <small class="muted">If water and oil are not costed, the optimiser treats them as free and will tend to use the
-                maximum you allow. Enter a price to avoid that.</small>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">5</span> What nutrition do you need?</h2>
-            <p class="muted">Per 100 g of the finished mix. A minimum protein is needed.</p>
-            <div class="table-wrap"><table class="data-table targets-table"><thead><tr><th>Nutrient</th><th>At least</th><th>At most</th></tr></thead>
-                <tbody data-nutrition-targets></tbody></table></div>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">6</span> Choose the properties you want your product to have <span class="muted">(checked on the result)</span></h2>
-            <div data-functional-targets></div>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">7</span> Batch and budget</h2>
+            <h2><span class="step-no">4</span> Batch size <span class="muted">(budget optional)</span></h2>
             <div class="layout-inline">
                 <div class="field"><label for="batch">Batch size (kg)</label><input type="number" id="batch" min="0.01" step="any" value="100" required></div>
                 <div class="field"><label for="budget">Most you want to spend on the batch (&#8358;, optional)</label><input type="number" id="budget" min="0" step="any" placeholder="no limit"></div>
@@ -93,14 +47,14 @@
         </div>
 
         <div class="btn-row run-row">
-            <button type="submit" class="btn">Find the best recipe</button>
+            <button type="submit" class="btn">Rank and find the best blend</button>
             <button type="button" class="btn secondary" id="saveRun" disabled>Save</button>
             <span id="savedNote"></span>
         </div>
     </form>
 
     <div class="card" id="result">
-        <div class="empty-state">Fill in the steps above and press <strong>Find the best recipe</strong>.</div>
+        <div class="empty-state">Fill in the steps above and press <strong>Rank and find the best blend</strong>.</div>
     </div>
 
     <script type="application/json" id="pageConfig">{{ config | tojson }}</script>

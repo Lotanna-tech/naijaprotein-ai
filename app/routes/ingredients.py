@@ -1,8 +1,8 @@
 from flask import Blueprint, abort, jsonify, render_template, request
 
+from ai_engine import application as AP
 from ai_engine import products as PR
 from ai_engine import properties as P
-from ai_engine.dataset import LOCATION_STATUS_LABELS
 from ai_engine.locations import NIGERIA_STATES, STATE_LABELS
 from app.services.formulation_service import get_engine, get_view
 
@@ -43,8 +43,7 @@ def _common(dataset, location):
     return {
         "states": NIGERIA_STATES, "state_labels": STATE_LABELS, "location": location,
         "coverage": base.coverage(), "price_states": base.states_with_prices(),
-        "summary": dataset.summary(), "location_labels": LOCATION_STATUS_LABELS,
-        "products": PR.PRODUCTS,
+        "summary": dataset.summary(), "products": PR.PRODUCTS,
     }
 
 
@@ -53,6 +52,8 @@ def _unavailable_reason(dataset, iid, key):
     loc = getattr(dataset, "location_refusals", {}).get((iid, key))
     if loc:
         return f"No measurements in {dataset.location}, and it cannot be estimated from other states: {loc}"
+    if not dataset.records.get((iid, key)):
+        return "Not measured for this ingredient in any Nigerian state yet."
     return refusals.get((iid, key), "")
 
 
@@ -89,8 +90,9 @@ def get_ingredient(ingredient_id):
     data["location"] = location
     data["unavailable"] = [{"property": p.key, "reason": _unavailable_reason(dataset, ingredient_id, p.key)}
                            for p in P.PROPERTIES.values() if p.key not in ing.values]
-    data["variation"] = {key: base.location_model(ingredient_id, key).summary()
+    data["variation"] = {key: base.location_summary(ingredient_id, key)
                          for (iid, key) in base.records if iid == ingredient_id}
+    data["price_unavailable"] = getattr(dataset, "price_refusals", {}).get(ingredient_id)
     return jsonify(data)
 
 
@@ -129,15 +131,10 @@ def profile(ingredient_id):
     if ing is None:
         abort(404)
     base, _ = get_engine()
-    variation = {}
-    for key in P.PROPERTIES:
-        if (ingredient_id, key) in base.records:
-            variation[key] = base.location_model(ingredient_id, key).summary()
+    fit = {pid: AP.quick_ranking(dataset, product).get(ingredient_id) for pid, product in PR.PRODUCTS.items()}
     unverified = {key: recs for (iid, key), recs in base.unverified.items() if iid == ingredient_id}
-    reasons = {p.key: _unavailable_reason(dataset, ingredient_id, p.key) for p in P.PROPERTIES.values()
-               if p.key not in ing.values}
     return render_template("ingredient_profile.html", ing=ing, groups=P.by_group(), group_labels=P.GROUP_LABELS,
-                           group_notes=P.GROUP_NOTES, sources=dataset.sources, variation=variation,
-                           unverified=unverified, reasons=reasons,
+                           group_notes=P.GROUP_NOTES, sources=dataset.sources, fit={k: v for k, v in fit.items() if v},
+                           unverified=unverified, labels={k: p.label for k, p in P.PROPERTIES.items()},
                            unverified_prices=base.unverified_prices.get(ingredient_id, []),
                            **_common(dataset, location))
