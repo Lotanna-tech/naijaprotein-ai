@@ -531,3 +531,36 @@ td.leader { background: #f0f8f2; }
 .record { margin-bottom: 6px; }
 .record details, td details { font-size: 12px; color: var(--muted); }
 .record summary, td summary { cursor: pointer; color: var(--green); }
+
+/* Ranking, certainty card and contribution bars (simulate / optimise results) */
+.criteria-box { margin-top: 16px; }
+.criteria-box h3 { margin-bottom: 6px; }
+.badge.importance-high { background: #dff3e6; color: #17603a; }
+.badge.importance-medium { background: #e3eefc; color: #1d4f91; }
+.badge.importance-low { background: #f0f0f0; color: #555; }
+.certainty-card { border: 2px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 14px 0 18px; background: #fff; }
+.certainty-card.high { border-color: #2f8a55; background: #f3fbf6; }
+.certainty-card.medium { border-color: #d79a2b; background: #fffaf0; }
+.certainty-card.low { border-color: #c0392b; background: #fff6f5; }
+.certainty-card .level { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.certainty-card.high .level { color: #17603a; }
+.certainty-card.medium .level { color: #8a5a00; }
+.certainty-card.low .level { color: #a12a2a; }
+.certainty-card h3 { margin: 6px 0 10px; font-size: 18px; }
+.certainty-points { margin: 0 0 8px 18px; display: flex; flex-direction: column; gap: 5px; font-size: 14px; line-height: 1.5; }
+.certainty-card details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.prob { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.prob .bar { flex: 1; height: 8px; background: #e7efe9; border-radius: 4px; overflow: hidden; }
+.prob .bar span { display: block; height: 100%; background: var(--green); }
+.prob b { font-size: 13px; min-width: 38px; text-align: right; }
+.rank-no { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center;
+    background: var(--light-green); font-weight: 800; }
+.rank-top td { background: #f3fbf6; }
+.ranking-table details summary { cursor: pointer; font-size: 12px; margin-top: 4px; }
+.contrib { display: grid; grid-template-columns: minmax(150px, 1.4fr) minmax(80px, 1fr) 50px minmax(80px, auto); gap: 6px 10px;
+    align-items: center; font-size: 12px; margin-top: 8px; }
+.contrib .bar { height: 8px; background: #e7efe9; border-radius: 4px; overflow: hidden; }
+.contrib .bar span { display: block; height: 100%; background: #6aa883; }
+.criteria-box select { padding: 6px 8px; border: 1px solid #dce5de; border-radius: 8px; font-family: inherit; background: #fff; }
+.criteria-box .row-off td { color: #9aa49e; }
+.criteria-box .row-off select { color: #6b746f; }

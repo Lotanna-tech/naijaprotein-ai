@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | NaijaProtein AI{% endblock %}
+
+{% block content %}
+<section class="page">
+    <div class="card" style="max-width:640px;margin:40px auto;text-align:center">
+        <h1>{{ title }}</h1>
+        <p class="muted">{{ message }}</p>
+        <div class="btn-row" style="justify-content:center;margin-top:16px">
+            <a class="btn" href="{{ url_for('dashboard') }}">Go to the home page</a>
+            <a class="btn secondary" href="{{ url_for('catalogue.index') }}">See the ingredients</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

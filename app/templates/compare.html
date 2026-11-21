@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% from "_macros.html" import fmt, value_cell, kind, loc_mark, state_form, tip %}
+{% from "_macros.html" import fmt, value_cell, price_cell, state_form, tip %}
 
 {% block title %}Compare ingredients | NaijaProtein AI{% endblock %}
 
 {% block content %}
 <section class="page">
     <div class="page-header">
-        <span class="eyebrow">INGREDIENT INTELLIGENCE</span>
+        <span class="eyebrow">COMPARE</span>
         <h1>Compare ingredients{% if product %} for {{ product.name | lower }}{% endif %}</h1>
         {% if product %}
-            <p>{{ product.summary }} The properties that matter most for {{ product.examples | lower }} are highlighted,
-               with the ingredient that scores best on each. No ingredient is ranked "best overall": the right choice
-               depends on which properties your product needs.</p>
+            <p>{{ product.summary }} The properties that matter for {{ product.examples | lower }} are highlighted, with
+               the best of these proteins on each.
+               <a href="{{ url_for('formulations.index', product=product.id, location=location) }}">Rank them for this product &rarr;</a></p>
         {% else %}
-            <p>Side-by-side values. Choose a product to highlight the properties that matter for it.</p>
+            <p>Side-by-side values. Choose a product to highlight what matters for it.</p>
         {% endif %}
     </div>
 
@@ -45,11 +45,10 @@
             <tbody>
                 <tr class="group-row"><td colspan="{{ items|length + 1 }}">Price and stock</td></tr>
                 <tr>
-                    <td>Price (&#8358;/kg)</td>
+                    <td>Price</td>
                     {% for ing in items %}
-                        <td>{% if ing.price %}{{ fmt(ing.price.value, 0) }} {{ kind('measured') }}
-                                <span class="range">{{ ing.price.latest_date }}{% if ing.price.availability_kg %} &middot; {{ '{:,.0f}'.format(ing.price.availability_kg) }} kg in stock{% endif %}</span>
-                            {% else %}<span class="muted">no verified price</span>{% endif %}</td>
+                        <td>{{ price_cell(ing.price, location) }}
+                            {% if ing.price and ing.price.kind != 'predicted' and ing.price.availability_kg %}<span class="range">{{ '{:,.0f}'.format(ing.price.availability_kg) }} kg in stock</span>{% endif %}</td>
                     {% endfor %}
                 </tr>
                 {% for group, props in groups.items() %}
@@ -60,10 +59,10 @@
                         {% set rel = product.relevance(p.key) if product else none %}
                         <tr class="{{ 'relevant-row' if rel }}">
                             <td>{{ p.label }} {{ tip(p.plain) }}<span class="range">{{ p.unit }}</span>
-                                {% if rel %}<span class="relevance">{{ rel.why }} ({{ 'higher' if rel.direction == 'higher' else 'lower' }} is usually better)</span>{% endif %}</td>
+                                {% if rel %}<span class="relevance">{{ rel.why }}{% if rel.direction == 'lower' %} (lower is better){% endif %}</span>{% endif %}</td>
                             {% for ing in items %}
                                 <td class="{{ 'leader' if leaders.get(p.key) == ing.id }}">{{ value_cell(ing, p.key, location) }}
-                                    {% if leaders.get(p.key) == ing.id %}<span class="range"><strong>best of these for {{ product.name | lower }}</strong></span>{% endif %}</td>
+                                    {% if leaders.get(p.key) == ing.id %}<span class="range"><strong>best of these</strong></span>{% endif %}</td>
                             {% endfor %}
                         </tr>
                     {% endfor %}
@@ -71,8 +70,8 @@
                 {% endfor %}
             </tbody>
         </table>
-        <p class="muted" style="margin-top:12px">Only properties with at least one value are listed. Functional values depend
-            on test method and conditions; open an ingredient to see how each was measured.</p>
+        <p class="muted" style="margin-top:12px">Only properties with at least one value are shown. Open an ingredient to
+            see where each value comes from.</p>
     </div>
 </section>
 {% endblock %}

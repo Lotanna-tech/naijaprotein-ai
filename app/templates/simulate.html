@@ -1,23 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}Simulate a formulation | NaijaProtein AI{% endblock %}
+{% block title %}Simulate a blend | NaijaProtein AI{% endblock %}
 
 {% block content %}
 <section class="page" data-page="simulate"
          data-simulate-url="{{ url_for('api.simulate_blend') }}"
+         data-optimise-page="{{ url_for('formulations.index') }}"
          data-detail-url="{{ url_for('formulations.detail', formulation_id=0) }}">
 
     <div class="page-header">
-        <span class="eyebrow">SIMULATE A FORMULATION</span>
-        <h1>Build a recipe and see what it gives you.</h1>
-        <p>Choose your product, where your ingredients come from, and how much of each to use. The results are
-           calculated from ingredient data; they are estimates, not laboratory results.</p>
+        <span class="eyebrow">SIMULATE A BLEND</span>
+        <h1>Test your own blend of plant proteins.</h1>
+        <p>Pick a product, a state and how much of each protein. You get a score for how well the blend suits the
+           product, what it costs and how sure we are. Then let the AI improve it.</p>
     </div>
 
     <form id="simForm" class="steps-form" novalidate>
         <div class="card step">
             <h2><span class="step-no">1</span> What are you making?</h2>
             <div class="product-choices" data-products></div>
+            <div data-criteria></div>
         </div>
 
         <div class="card step">
@@ -25,17 +27,18 @@
             <div class="field">
                 <label for="location">Nigerian state</label>
                 <select id="location" name="location" data-states></select>
-                <small>Values measured in this state are used. Where a state has no measurements, a value is only
-                    estimated from other states if that estimate has been checked; prices are never estimated.</small>
+                <small>We use values and prices from this state. Where there are none, we estimate them from other
+                    states.</small>
             </div>
         </div>
 
         <div class="card step">
-            <h2><span class="step-no">3</span> Set how much of each ingredient you want to use</h2>
-            <p class="muted">Amounts are a percentage of the whole mix, including water and oil. They must add up to 100%.</p>
+            <h2><span class="step-no">3</span> Your blend of plant proteins</h2>
+            <p class="muted">Amounts are a percentage of the blend and cannot add up to more than 100%: lower one protein
+                before raising another. Set a protein to 0% to leave it out.</p>
             <div class="table-wrap">
                 <table class="data-table recipe-table">
-                    <thead><tr><th>Ingredient</th><th>Amount (% of mix)</th></tr></thead>
+                    <thead><tr><th>Plant protein</th><th>Amount (% of the blend)</th></tr></thead>
                     <tbody data-recipe></tbody>
                 </table>
             </div>
@@ -47,29 +50,6 @@
                 <label for="batch">Batch size (kg)</label>
                 <input type="number" id="batch" name="batch" min="0" step="any" value="100">
             </div>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">4</span> What nutrition do you want? <span class="muted">(optional)</span></h2>
-            <p class="muted">Per 100 g of the finished mix. Leave blank to skip.</p>
-            <div class="table-wrap"><table class="data-table targets-table"><thead><tr><th>Nutrient</th><th>At least</th><th>At most</th></tr></thead>
-                <tbody data-nutrition-targets></tbody></table></div>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">5</span> Choose the properties you want your product to have <span class="muted">(optional)</span></h2>
-            <div data-functional-targets></div>
-        </div>
-
-        <div class="card step">
-            <h2><span class="step-no">6</span> Costs of water and oil <span class="muted">(optional)</span></h2>
-            <div class="layout-inline">
-                <div class="field"><label for="waterPrice">Water price (&#8358;/kg)</label>
-                    <input type="number" id="waterPrice" min="0" step="any" placeholder="not costed"></div>
-                <div class="field"><label for="oilPrice">Oil price (&#8358;/kg)</label>
-                    <input type="number" id="oilPrice" min="0" step="any" placeholder="not costed"></div>
-            </div>
-            <small class="muted">There is no verified price for water or oil in the data, so they are left out of the cost unless you enter one.</small>
         </div>
 
         <div class="btn-row run-row">

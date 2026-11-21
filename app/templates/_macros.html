@@ -1,48 +1,49 @@
-{# Value type badge: measured / calculated / predicted / not available. #}
-{% macro kind(k) -%}
-{%- set labels = {'measured': 'measured', 'calculated': 'calculated', 'predicted': 'estimated',
-                  'unavailable': 'not available', 'definition': 'by definition'} -%}
-<span class="badge kind-{{ k }}" title="{{ {'measured': 'From a research study or verified data record',
-    'calculated': 'Calculated from the ingredient values', 'predicted': 'Estimated by a checked statistical model, not measured',
-    'unavailable': 'No reliable value'}.get(k, '') }}">{{ labels.get(k, k) }}</span>
-{%- endmacro %}
-
-{% macro badge(status) -%}
-<span class="badge {{ status }}">{{ status }}</span>
-{%- endmacro %}
-
 {% macro fmt(v, nd=2) -%}
 {%- if v is none -%}&ndash;{%- else -%}{{ ("%." ~ nd ~ "f") | format(v) }}{%- endif -%}
 {%- endmacro %}
 
-{# Where a value for the selected state came from. #}
-{% macro loc_mark(v, location) -%}
-{%- if v.location_status == 'selected' -%}<span class="badge located">measured in {{ location }}</span>
-{%- elif v.location_status == 'location_model' -%}<span class="badge fallback" title="No measurements in this state; estimated from {{ v.prediction.n_states }} other states">estimated from other states</span>
-{%- elif v.location_status == 'national' and v.locations -%}<span class="range">{{ v.locations | join(', ') }}</span>
+{% macro naira(v) -%}&#8358;{{ '{:,.0f}'.format(v) }}{%- endmacro %}
+
+{# One badge saying where a value comes from: measured here, measured elsewhere, calculated or estimated. #}
+{% macro source_badge(v, location) -%}
+{%- if v.status == 'predicted' and v.confidence == 'indicative' -%}<span class="badge low" title="{{ (v.prediction or {}).note }}">rough estimate</span>
+{%- elif v.status == 'predicted' -%}<span class="badge kind-predicted" title="{{ (v.prediction or {}).note }}">estimated</span>
+{%- elif v.kind == 'calculated' -%}<span class="badge kind-calculated" title="Worked out from the other values of the same sample">calculated</span>
+{%- elif location -%}<span class="badge kind-measured">measured in {{ location }}</span>
+{%- else -%}<span class="badge kind-measured">measured</span>
 {%- endif -%}
 {%- endmacro %}
 
 {% macro value_cell(ing, key, location, nd=2) -%}
 {%- set v = ing.values.get(key) -%}
 {%- if v -%}
-    {{ fmt(v.value, nd) }} {{ kind(v.kind) }} {{ loc_mark(v, location) }}
-    {%- if v.n > 1 %}<span class="range">{{ fmt(v.low, nd) }}&ndash;{{ fmt(v.high, nd) }} across {{ v.n }} samples</span>{% endif %}
-    {%- if v.kind == 'predicted' %}<span class="range">likely {{ fmt(v.low, nd) }}&ndash;{{ fmt(v.high, nd) }}</span>{% endif %}
+    {{ fmt(v.value, nd) }} {{ source_badge(v, location) }}
+    {%- if v.status == 'predicted' %}<span class="range">likely {{ fmt(v.low, nd) }}&ndash;{{ fmt(v.high, nd) }}</span>
+    {%- elif v.n > 1 %}<span class="range">{{ fmt(v.low, nd) }}&ndash;{{ fmt(v.high, nd) }} across {{ v.n }} samples</span>{% endif %}
 {%- else -%}
-    <span class="muted">not available</span>
+    <span class="muted">not measured yet</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# Price: the average of local market prices, or an estimate with its likely range. #}
+{% macro price_cell(price, location) -%}
+{%- if price -%}
+    {{ naira(price.value) }}/kg {% if price.kind == 'predicted' %}{{ source_badge(price, location) }}<span class="range">likely {{ naira(price.low) }}&ndash;{{ naira(price.high) }}</span>
+    {%- elif price.n > 1 %}<span class="range">{{ naira(price.low) }}&ndash;{{ naira(price.high) }} across {{ price.n }} sellers</span>{% endif %}
+{%- else -%}
+    <span class="muted">no price</span>
 {%- endif -%}
 {%- endmacro %}
 
 {# GET form that switches the Nigerian state for the current page, keeping other query args. #}
-{% macro state_form(states, state_labels, coverage, location, action, keep={}, ids=[]) -%}
+{% macro state_form(states, state_labels, coverage, location, action, keep={}, ids=[], price_states=[]) -%}
 <form class="filters location-bar" method="get" action="{{ action }}">
     <div>
         <label for="location">State</label><br>
         <select id="location" name="location" onchange="this.form.submit()">
             <option value="">All of Nigeria</option>
             {% for s in states %}
-                <option value="{{ s }}" {{ 'selected' if s == location }}>{{ state_labels[s] }}{% if coverage[s] %} &bull; data{% endif %}</option>
+                <option value="{{ s }}" {{ 'selected' if s == location }}>{{ state_labels[s] }}{% if coverage[s] %} (local data){% endif %}</option>
             {% endfor %}
         </select>
     </div>
@@ -51,11 +52,10 @@
     <noscript><button class="btn small" type="submit">Show</button></noscript>
     <p class="muted" style="max-width:660px">
         {% if location %}
-            Showing values measured in <strong>{{ state_labels[location] }}</strong>. Where there are none, a value
-            is estimated from other states only if that estimate has been checked against real data; otherwise it is
-            shown as not available.
+            Values measured in {{ state_labels[location] }} are used. Anything not measured there is estimated from
+            other states and marked <em>estimated</em>.
         {% else %}
-            Showing all verified Nigerian data combined. States marked &bull; have measurements.
+            All Nigerian data combined. Choose a state to see its own values.
         {% endif %}
     </p>
 </form>

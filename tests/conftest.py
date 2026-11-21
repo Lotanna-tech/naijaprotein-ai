@@ -8,8 +8,6 @@ application's data/ folder.
 import csv
 import os
 
-import pytest
-
 PROP_HEADER = ["ingredient_id", "property", "value", "unit", "basis", "method", "processing", "source_id",
                "status", "notes", "sample", "location", "variety"]
 PRICE_HEADER = ["ingredient_id", "price_ngn_per_kg", "market", "price_date", "source_id", "status", "notes",
@@ -33,12 +31,6 @@ def prop(iid, key, value, state, unit="g/100 g", basis="dry", status="sourced", 
             "source_id": source, "status": status, "sample": sample, "location": f"Nigeria / {state}"}
 
 
-def price(iid, value, state, stock="", max_share="", status="sourced"):
-    return {"ingredient_id": iid, "price_ngn_per_kg": value, "source_id": "T1", "status": status,
-            "location": f"Nigeria / {state} / Test market", "availability_kg": stock,
-            "max_blend_share_pct": max_share, "price_date": "2026-10-01"}
-
-
 def build(tmp_path, props, prices=(), experiments=()):
     d = str(tmp_path)
     _write(os.path.join(d, "sources.csv"), ["source_id", "citation", "year", "doi_or_url", "notes"],
@@ -54,15 +46,3 @@ def build(tmp_path, props, prices=(), experiments=()):
            + [f"share_{i}" for i, _ in INGREDIENTS] + ["notes"], experiments)
     _write(os.path.join(d, "product_targets.csv"), ["product", "property", "min", "max", "source_id", "notes"], [])
     return d
-
-
-@pytest.fixture
-def simple_data(tmp_path):
-    """Two ingredients measured in Kano with known values, prices and stock."""
-    props = []
-    for iid, protein, fat, moist in (("soybean", 40.0, 20.0, 10.0), ("cowpea", 25.0, 2.0, 10.0)):
-        props += [prop(iid, "protein", protein, "Kano"), prop(iid, "fat", fat, "Kano"),
-                  prop(iid, "moisture", moist, "Kano", basis="as_is"),
-                  prop(iid, "water_absorption", 2.0 if iid == "soybean" else 1.5, "Kano", unit="g/g", basis="")]
-    prices = [price("soybean", 1000, "Kano", stock=1000, max_share=80), price("cowpea", 1200, "Kano", stock=1000)]
-    return build(tmp_path, props, prices)

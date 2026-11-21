@@ -1,6 +1,7 @@
 from flask import Blueprint, abort, render_template
 from flask_login import current_user, login_required
 
+from ai_engine import application as AP
 from ai_engine import products as PR
 from ai_engine import properties as P
 from ai_engine.locations import NIGERIA_STATES, STATE_LABELS
@@ -18,18 +19,13 @@ formulations = Blueprint(
 def _page_config():
     """Everything the simulation and optimisation forms need, as plain data."""
     dataset, _ = get_engine()
-    nutrition = [p for p in P.PROPERTIES.values() if p.group == "proximate"]
-    functional = [p for p in P.PROPERTIES.values() if p.group == "functional"]
+    coverage = dataset.coverage()
+    price_states = dataset.states_with_prices()
     return {
-        "products": [PR.to_dict(p) for p in PR.PRODUCTS.values()],
-        "product_targets": {pid: PR.default_targets(dataset, pid) for pid in PR.PRODUCTS},
-        "states": [{"id": s, "label": STATE_LABELS[s],
-                    "ingredients": sorted(dataset.coverage()[s]),
-                    "prices": s in dataset.states_with_prices()} for s in NIGERIA_STATES],
+        "products": [{**PR.to_dict(p), "criteria": AP.preview(dataset, p)} for p in PR.PRODUCTS.values()],
+        "states": [{"id": s, "label": STATE_LABELS[s], "ingredients": sorted(coverage[s]),
+                    "prices": s in price_states} for s in NIGERIA_STATES],
         "ingredients": [{"id": i.id, "name": i.name, "form": i.form} for i in dataset.ingredients.values()],
-        "nutrition": [{"key": p.key, "label": p.label, "unit": p.unit, "plain": p.plain} for p in nutrition],
-        "functional": [{"key": p.key, "label": p.label, "unit": p.unit, "plain": p.plain} for p in functional],
-        "blend_models": {m["property"]: m["usable"] for m in get_engine()[1].status()},
     }
 
 
@@ -60,4 +56,9 @@ def detail(formulation_id):
     f = db.session.get(Formulation, formulation_id)
     if f is None or f.user_id != current_user.id:
         abort(404)
-    return render_template("formulation_detail.html", f=f, data=f.result_data, req=f.request_data)
+    dataset, _ = get_engine()
+    names = {i.id: i.name for i in dataset.ingredients.values()}
+    labels = {k: p.label for k, p in P.PROPERTIES.items()}
+    product = PR.PRODUCTS.get(f.request_data.get("product"))
+    return render_template("formulation_detail.html", f=f, data=f.result_data, req=f.request_data, names=names,
+                           labels=labels, product_name=product.name if product else None)

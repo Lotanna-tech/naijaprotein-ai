@@ -50,10 +50,6 @@
                        class="login-link">
                         Admin Panel
                     </a>
-                {% else %}
-                    <a href="{{ url_for('formulations.history') }}" class="login-link">
-                        My Formulations
-                    </a>
                 {% endif %}
 
                 <a href="{{ url_for('auth.logout') }}"
@@ -108,7 +104,7 @@
 
         <div class="footer-links">
             <a href="{{ url_for('dashboard') }}#solutions">Features</a>
-            <a href="{{ url_for('catalogue.index') }}">Ingredient Intelligence</a>
+            <a href="{{ url_for('catalogue.index') }}">Ingredients</a>
             <a href="{{ url_for('dashboard') }}#help">Help</a>
             <a href="{{ url_for('dashboard') }}#contact">Contact</a>
         </div>

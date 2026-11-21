@@ -69,24 +69,31 @@ def test_simulate_requires_product_and_valid_recipe(client):
 
 def test_simulate_and_optimise(client):
     r = client.post("/api/simulate", json={"product": "beef", "location": "Kano",
-                                           "recipe": {"soybean": 40, "defatted_groundnut": 20, "water": 35, "oil": 5},
-                                           "targets": {"protein": {"min": 15}}})
+                                           "recipe": {"soybean": 40, "defatted_groundnut": 60}, "batch_kg": 100})
     assert r.status_code == 200
-    body = r.json
-    assert body["result"]["mix"]["protein"]["kind"] == "calculated"
-    assert body["result"]["targets"][0]["status"] == "met"
+    blend = r.json["result"]["blend"]
+    assert 0 <= blend["score"]["low"] <= blend["score"]["value"] <= blend["score"]["high"] <= 100
+    assert r.json["result"]["certainty"]["level"] in ("high", "medium", "low")
+    r = client.post("/api/simulate", json={"product": "beef", "recipe": {"soybean": 50, "water": 50}})
+    assert r.status_code == 400 and "Water and oil" in r.json["error"]
     r = client.post("/api/optimise", json={"product": "sausage", "location": "Kano", "batch_kg": 100,
-                                           "ingredient_ids": sorted(SCOPE), "targets": {"protein": {"min": 18}},
-                                           "water": {"min": 0, "max": 40}, "oil": {"min": 0, "max": 10}})
+                                           "ingredient_ids": sorted(SCOPE), "baseline": {"soybean": 50, "cowpea": 50}})
     assert r.status_code == 200 and r.json["result"]["feasible"]
-    assert r.json["profile"]["mix"]["protein"]["value"] >= 18 - 1e-6
+    res = r.json["result"]
+    assert [x["rank"] for x in res["ranking"]] == list(range(1, len(SCOPE) + 1))
+    assert abs(sum(res["blend"]["shares"].values()) - 1) < 1e-4
+    assert all(c["share"] <= c["max_share"] + 1e-6 for c in res["blend"]["components"])
+    assert res["comparison"]["score_gain"] >= 0 and res["lab_plan"]["runs"]
     r = client.post("/api/optimise", json={"product": "sausage", "location": "Kano", "batch_kg": 100,
-                                           "ingredient_ids": sorted(SCOPE), "targets": {"protein": {"min": 80}}})
+                                           "ingredient_ids": sorted(SCOPE), "budget": 1000})
     assert r.status_code == 200 and not r.json["result"]["feasible"]
-    assert r.json["explanation"]["reasons"]
+    assert "budget" in r.json["explanation"]["reasons"][0]
 
 
-def test_state_without_prices_gives_no_recipe(client):
+def test_state_without_prices_uses_estimated_prices(client):
     r = client.post("/api/optimise", json={"product": "beef", "location": "Lagos", "batch_kg": 100,
-                                           "ingredient_ids": sorted(SCOPE), "targets": {"protein": {"min": 15}}})
-    assert r.status_code == 200 and not r.json["result"]["feasible"]
+                                           "ingredient_ids": sorted(SCOPE)})
+    assert r.status_code == 200 and r.json["result"]["feasible"]
+    used = r.json["result"]["blend"]["components"]
+    assert used and all(c["price"]["kind"] == "predicted" for c in used)
+    assert r.json["result"]["blend"]["cost"]["estimated_prices"]

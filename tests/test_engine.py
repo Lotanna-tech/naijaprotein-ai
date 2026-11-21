@@ -1,15 +1,13 @@
-"""Tests for the calculation engine: data rules, location model, simulation,
-optimisation and prediction. Expected values are worked out by hand."""
+"""Tests for the calculation engine: data rules, location model and prediction.
+Expected values are worked out by hand."""
 
 import pytest
 
 from ai_engine import locations
-from ai_engine.blend import BlendError, simulate
 from ai_engine.dataset import Dataset
 from ai_engine.location_model import fit
-from ai_engine.optimiser import optimise
 from ai_engine.predictor import Predictor
-from tests.conftest import build, price, prop
+from tests.conftest import build, prop
 
 
 # ---------------------------------------------------------------- scope
@@ -75,101 +73,13 @@ def test_state_view_uses_state_data_or_validated_estimate(tmp_path):
     lagos = ds.view("Lagos")
     est = lagos.get("cowpea").values["protein"]
     assert est.status == "predicted" and est.location_status == "location_model"
-    assert "protein" not in lagos.get("soybean").values  # only 2 states: not validated
-    assert ("soybean", "protein") in lagos.location_refusals
+    assert est.confidence == "checked"
+    # only 2 states: still estimated, but as a rough (indicative) estimate with a wider range
+    rough = lagos.get("soybean").values["protein"]
+    assert rough.status == "predicted" and rough.confidence == "indicative"
+    assert rough.low < 43.0 < rough.high and (rough.high - rough.low) > (est.high - est.low)
     with pytest.raises(ValueError):
         ds.view("Sudan")
-
-
-# ---------------------------------------------------------------- simulation
-def test_mass_balance_with_water_and_oil(simple_data):
-    ds = Dataset(simple_data).view("Kano")
-    r = simulate(ds, Predictor(ds), {"soybean": 50, "water": 40, "oil": 10}, "beef", batch_kg=10)
-    # soybean as-is: protein 40 * 0.9 = 36, fat 20 * 0.9 = 18, moisture 10
-    assert r["mix"]["protein"]["value"] == pytest.approx(0.5 * 36)
-    assert r["mix"]["fat"]["value"] == pytest.approx(0.5 * 18 + 0.1 * 100)
-    assert r["mix"]["moisture"]["value"] == pytest.approx(0.5 * 10 + 0.4 * 100)
-    assert r["dry_protein_blend"]["protein"] == pytest.approx(40)
-    # cost excludes unpriced water and oil, and says so
-    assert r["cost"]["value"] == pytest.approx(500) and "Added water" in r["cost"]["excludes"]
-    assert r["components"][0]["kg"] == pytest.approx(5)
-
-
-def test_recipe_must_sum_to_100(simple_data):
-    ds = Dataset(simple_data)
-    with pytest.raises(BlendError):
-        simulate(ds, Predictor(ds), {"soybean": 50, "water": 40}, "beef")
-    with pytest.raises(ValueError):
-        simulate(ds, Predictor(ds), {"soybean": 100}, "pizza")
-
-
-def test_functional_properties_are_not_averaged(simple_data):
-    ds = Dataset(simple_data)
-    r = simulate(ds, Predictor(ds), {"soybean": 50, "cowpea": 50}, "beef")
-    f = r["functional"]["water_absorption"]
-    assert f["available"] is False and len(f["ingredient_values"]) == 2
-
-
-def test_targets_are_checked(simple_data):
-    ds = Dataset(simple_data)
-    r = simulate(ds, Predictor(ds), {"soybean": 50, "water": 50}, "beef",
-                 targets={"protein": {"min": 20}, "fat": {"max": 5}, "water_absorption": {"min": 1}})
-    status = {t["property"]: t["status"] for t in r["targets"]}
-    assert status == {"protein": "not_met", "fat": "not_met", "water_absorption": "not_checked"}
-
-
-# ---------------------------------------------------------------- optimisation
-def test_optimiser_meets_constraints_at_lowest_cost(simple_data):
-    ds = Dataset(simple_data).view("Kano")
-    r = optimise(ds, ["soybean", "cowpea"], 100, targets={"protein": {"min": 20}},
-                 water={"min": 0, "max": 50}, water_price=0)
-    assert r["feasible"]
-    x = r["recipe"]
-    protein = x.get("soybean", 0) * 36 + x.get("cowpea", 0) * 22.5
-    assert protein >= 20 - 1e-4  # recipe fractions are rounded to 6 decimals
-    # soybean is cheaper per unit of protein; its share is capped at 80% of the protein blend
-    prot_total = x["soybean"] + x.get("cowpea", 0)
-    assert x["soybean"] / prot_total <= 0.8 + 1e-4
-    assert sum(x.values()) == pytest.approx(1)
-
-
-def test_optimiser_reports_infeasible_honestly(simple_data):
-    ds = Dataset(simple_data).view("Kano")
-    r = optimise(ds, ["soybean", "cowpea"], 100, targets={"protein": {"min": 60}})
-    assert not r["feasible"] and "recipe" not in r
-    assert "highest protein" in r["diagnosis"]["reasons"][0]
-
-
-def test_optimiser_respects_stock(simple_data):
-    ds = Dataset(simple_data).view("Kano")
-    r = optimise(ds, ["soybean", "cowpea"], 5000, targets={"protein": {"min": 20}})
-    assert not r["feasible"]
-    assert "stock" in r["diagnosis"]["reasons"][0]
-
-
-def test_optimiser_refuses_functional_constraints(simple_data):
-    ds = Dataset(simple_data)
-    with pytest.raises(ValueError):
-        optimise(ds, ["soybean"], 100, targets={"water_absorption": {"min": 1}})
-
-
-def test_water_holding_rule_limits_water(simple_data):
-    ds = Dataset(simple_data).view("Kano")
-    # Both ingredients are needed: soybean alone may not exceed 80% of the protein blend.
-    r = optimise(ds, ["soybean", "cowpea"], 100, targets={"protein": {"min": 5}}, water={"min": 0, "max": 90},
-                 water_price=0, limit_water_to_holding=True)
-    assert r["feasible"]
-    x = r["recipe"]
-    # water absorption: soybean 2.0 g/g, cowpea 1.5 g/g
-    assert x["water"] <= 2.0 * x["soybean"] + 1.5 * x.get("cowpea", 0) + 1e-4
-    assert x["water"] > 0  # free water is used up to the holding limit
-
-
-def test_no_price_means_no_optimisation(tmp_path):
-    ds = Dataset(build(tmp_path, [prop("soybean", "protein", 40, "Kano"),
-                                  prop("soybean", "moisture", 10, "Kano", basis="as_is")]))
-    r = optimise(ds, ["soybean"], 100, targets={"protein": {"min": 20}})
-    assert r["status"] == "no_ingredients"
 
 
 # ---------------------------------------------------------------- prediction

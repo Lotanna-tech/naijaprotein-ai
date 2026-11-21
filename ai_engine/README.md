@@ -6,17 +6,22 @@ from scripts or notebooks:
 
 ```python
 from ai_engine.dataset import Dataset
-from ai_engine.predictor import Predictor
-from ai_engine.blend import simulate
-from ai_engine.optimiser import optimise
-from ai_engine.explain import explain_optimisation
+from ai_engine import application
 
 ds = Dataset("data")
-pred = Predictor(ds)
-req = dict(ingredient_ids=list(ds.ingredients), target_protein=30, batch_kg=100)
-result = optimise(ds, **req)
-explanation = explain_optimisation(ds, pred, req, result)
+kano = ds.view("Kano")
+result, explanation = application.optimise(kano, "beef", list(ds.ingredients), batch_kg=100)
+result["ranking"][0]["name"], result["certainty"]["label"], result["blend"]["shares"]
+result, explanation = application.simulate(kano, "beef", {"soybean": 60, "cowpea": 40}, batch_kg=100)
 ```
+
+`application.py` drives the Simulate and Optimise pages (ranking, robust
+optimisation, certainty card, lab plan).
 
 Which properties may be averaged is decided in `properties.py`
 (`blend_rule`). Only `linear` properties can be optimisation constraints.
+
+`ds.view("Lagos")` gives the values for one state: its own records first,
+then estimates from the other states (`location_model.py`) and estimated
+prices (`price_model.py`), each with a 95% range and a `confidence` of
+`checked` or `indicative`.

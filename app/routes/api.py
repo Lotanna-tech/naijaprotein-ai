@@ -4,11 +4,8 @@ from functools import wraps
 from flask import Blueprint, abort, jsonify, request
 from flask_login import current_user
 
+from ai_engine import application as AP
 from ai_engine import products as PR
-from ai_engine import properties as P
-from ai_engine.blend import BlendError, OIL, WATER, simulate
-from ai_engine.explain import explain_optimisation, explain_simulation
-from ai_engine.optimiser import OptimiseError, optimise
 from app.extensions import db
 from app.models.formulation import Formulation
 from app.services.formulation_service import get_view
@@ -81,38 +78,31 @@ def _view(location):
         raise InputError(str(err))
 
 
-def _targets(data):
-    raw = data.get("targets") or {}
-    if not isinstance(raw, dict):
-        raise InputError("Targets must be an object keyed by property.")
-    out = {}
-    for key, t in raw.items():
-        if key not in P.PROPERTIES or not isinstance(t, dict):
-            raise InputError(f"Unknown target '{key}'.")
-        label = P.get(key).label
-        mn = _number(t, "min", f"Minimum {label.lower()}", minimum=0)
-        mx = _number(t, "max", f"Maximum {label.lower()}", minimum=0)
-        if mn is None and mx is None:
-            continue
-        if mn is not None and mx is not None and mn > mx:
-            raise InputError(f"The minimum for {label.lower()} is above the maximum.")
-        out[key] = {"min": mn, "max": mx}
-    return out
-
-
-def _range(data, key, label):
-    raw = data.get(key)
-    if raw in (None, False):
+def _recipe(data, key, required):
+    """{ingredient id: % of the protein blend}, validated for type only (the engine checks the rest)."""
+    recipe = data.get(key)
+    if recipe in (None, {}) and not required:
         return None
-    if not isinstance(raw, dict):
-        raise InputError(f"{label} limits must be an object with min and max.")
-    return {"min": _number(raw, "min", f"Minimum {label.lower()}", minimum=0, maximum=100),
-            "max": _number(raw, "max", f"Maximum {label.lower()}", minimum=0, maximum=100)}
+    if not isinstance(recipe, dict) or not all(isinstance(k, str) for k in recipe):
+        raise InputError("Set how much of each plant protein you want to use, as % of the protein blend.")
+    return recipe
 
 
-def _prices(data):
-    return (_number(data, "water_price", "Water price", minimum=0),
-            _number(data, "oil_price", "Oil price", minimum=0))
+def _importance(data):
+    """Optional {property: high/medium/low/off}; the engine checks the property names and levels."""
+    raw = data.get("importance")
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in raw.items()):
+        raise InputError("Importance settings must be an object: {property: high, medium, low or off}.")
+    return raw
+
+
+def _blend_summary(result):
+    """(protein, cost per kg) of the blend in a result, for the saved-runs list."""
+    blend = result.get("blend") or {}
+    protein = (blend.get("protein") or {}).get("value")
+    return protein, (blend.get("cost") or {}).get("value")
 
 
 def _save(kind, name, req, result, explanation, protein, cost, feasible):
@@ -126,8 +116,7 @@ def _save(kind, name, req, result, explanation, protein, cost, feasible):
 
 
 @api.errorhandler(InputError)
-@api.errorhandler(BlendError)
-@api.errorhandler(OptimiseError)
+@api.errorhandler(AP.ApplicationError)
 def _bad_request(err):
     return jsonify({"error": str(err)}), 400
 
@@ -135,70 +124,50 @@ def _bad_request(err):
 @api.post("/simulate")
 @api_login_required
 def simulate_blend():
+    """What a stated blend of plant proteins does for the product, with its uncertainty."""
     data = _json_body()
     product = _product(data)
-    recipe = data.get("recipe")
-    if not isinstance(recipe, dict):
-        raise InputError("Set how much of each ingredient you want to use.")
+    recipe = _recipe(data, "recipe", required=True)
     batch_kg = _number(data, "batch_kg", "Batch size", minimum=0.001, maximum=MAX_BATCH_KG)
-    targets = _targets(data)
-    water_price, oil_price = _prices(data)
+    importance = _importance(data)
     location = _location(data)
-    dataset, predictor, _ = _view(location)
-    result = simulate(dataset, predictor, recipe, product, batch_kg, targets, water_price, oil_price)
-    explanation = explain_simulation(dataset, result)
+    dataset, _, _ = _view(location)
+    result, explanation = AP.simulate(dataset, product, recipe, batch_kg, importance)
     body = {"result": result, "explanation": explanation}
     if data.get("save"):
-        prot = result["mix"]["protein"]
         req = {"product": product, "location": location, "recipe": recipe, "batch_kg": batch_kg,
-               "targets": targets, "water_price": water_price, "oil_price": oil_price}
-        body["saved_id"] = _save("simulation", data.get("name"), req, result, explanation, prot.get("value"),
-                                 result["cost"].get("value"), True)
+               "importance": importance}
+        protein, cost = _blend_summary(result)
+        body["saved_id"] = _save("simulation", data.get("name"), req, result, explanation, protein, cost, True)
     return jsonify(body)
 
 
 @api.post("/optimise")
 @api_login_required
 def optimise_blend():
+    """Rank the chosen plant proteins for the product and find the best blend.
+
+    Optional `baseline`: a simulated blend ({id: % of the protein blend}) to compare with.
+    """
     data = _json_body()
     product = _product(data)
     ids = data.get("ingredient_ids")
     if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
-        raise InputError("Choose the protein ingredients you want to use.")
-    raw_limits = data.get("limits") or {}
-    if not isinstance(raw_limits, dict):
-        raise InputError("Ingredient limits must be an object keyed by ingredient.")
-    limits = {iid: {"min": _number(lim, "min", "Minimum share", minimum=0, maximum=100),
-                    "max": _number(lim, "max", "Maximum share", minimum=0, maximum=100)}
-              for iid, lim in raw_limits.items() if isinstance(lim, dict)}
-    targets = _targets(data)
-    lp_targets = {k: v for k, v in targets.items() if P.get(k).optimisable}
-    water_price, oil_price = _prices(data)
-    req = {
-        "ingredient_ids": list(dict.fromkeys(ids)),
-        "batch_kg": _number(data, "batch_kg", "Batch size", required=True, minimum=0.001, maximum=MAX_BATCH_KG),
-        "targets": lp_targets, "limits": limits,
-        "water": _range(data, "water", "Added water"), "oil": _range(data, "oil", "Edible oil"),
-        "budget": _number(data, "budget", "Budget", minimum=0.01),
-        "water_price": water_price, "oil_price": oil_price,
-        "limit_water_to_holding": bool(data.get("limit_water_to_holding")),
-    }
+        raise InputError("Choose the plant proteins you want to consider.")
+    batch_kg = _number(data, "batch_kg", "Batch size", required=True, minimum=0.001, maximum=MAX_BATCH_KG)
+    budget = _number(data, "budget", "Budget", minimum=0.01)
+    baseline = _recipe(data, "baseline", required=False)
+    importance = _importance(data)
     location = _location(data)
-    dataset, predictor, national = _view(location)
-    result = optimise(dataset, **req)
-    result["location"] = location
-    profile = None
-    if result["feasible"]:
-        profile = simulate(dataset, predictor, {k: v * 100 for k, v in result["recipe"].items()}, product,
-                           req["batch_kg"], targets, water_price, oil_price)
-    explanation = explain_optimisation(dataset, predictor, {**req, "product": product}, result, profile, national)
-    body = {"result": result, "profile": profile, "explanation": explanation}
+    dataset, _, _ = _view(location)
+    result, explanation = AP.optimise(dataset, product, ids, batch_kg, budget, baseline, importance)
+    body = {"result": result, "explanation": explanation}
     if data.get("save"):
-        body["saved_id"] = _save("optimisation", data.get("name"),
-                                 {**req, "targets": targets, "product": product, "location": location},
-                                 {**result, "profile": profile}, explanation,
-                                 profile["mix"]["protein"].get("value") if profile else None,
-                                 result.get("cost_per_kg"), result["feasible"])
+        req = {"product": product, "location": location, "ingredient_ids": list(dict.fromkeys(ids)),
+               "batch_kg": batch_kg, "budget": budget, "baseline": baseline, "importance": importance}
+        protein, cost = _blend_summary(result)
+        body["saved_id"] = _save("optimisation", data.get("name"), req, result, explanation, protein, cost,
+                                 result["feasible"])
     return jsonify(body)
 
 
